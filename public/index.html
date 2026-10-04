@@ -121,6 +121,13 @@ footer a{color:var(--accent)}
 .t3-count{color:var(--muted);font-size:16px}
 .t3-count b{font:700 30px/1 var(--font-display);color:var(--fg);margin-right:6px;font-variant-numeric:tabular-nums}
 .t3-sub{font:700 18px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:0 0 14px}
+.rs{text-align:left;display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:8px;min-width:0;border-left-width:4px}
+.rs[aria-current="true"]{outline:2px solid var(--accent)}
+.rs .k{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.rs .h{font-weight:700;font-size:15px;line-height:1.25}
+.rs .s{font-size:12px;color:var(--muted)}
+.rs.ok{border-left-color:var(--ok)}.rs.warn{border-left-color:var(--warn)}.rs.wait{border-left-color:var(--line)}
 .banner{border:1px solid var(--line,#444);border-radius:10px;padding:12px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:4px}
 .banner.ok{background:var(--ok-bg);color:var(--ok)}
 .banner.warn{background:var(--warn-bg);color:var(--warn)}
@@ -156,6 +163,7 @@ footer a{color:var(--accent)}
     <button id="btnFull" type="button">Tela cheia</button>
   </div>
 
+  <section class="resumo" id="resumo" aria-label="Resumo por cargo"></section>
   <div class="tabs" role="tablist" id="tabs"></div>
   <main class="panel" id="panel"></main>
   <div class="tabs" role="tablist" id="t3tabs" hidden></div>
@@ -496,12 +504,44 @@ function renderTop3() {
   if (box) box.scrollTop = scroll;
 }
 
+const firstName = c => String(c.name || "").split(/\s+/).slice(0, 3).join(" ");
+
+/* Resumo de uma linha por cargo: situação + andamento da apuração. */
+function resumoItem(v) {
+  const d = state.data[v.id];
+  const label = T3_TAB[v.id];
+  if (!d) return { label, cls: "wait", head: "Carregando…", sub: "" };
+  if (d.kind === "wait") return { label, cls: "wait", head: "Aguardando TSE", sub: "Ainda não publicado" };
+  if (d.kind === "error") return { label, cls: "wait", head: "Falha na leitura", sub: "Tentando de novo" };
+  const r = d.result, prog = `${fmtPct(r.sectionsPct)} das seções`;
+  const info = runoffInfo(v, r);
+  let cls = "warn", head = "Em apuração";
+  if (info && info.kind === "won") { cls = "ok"; head = `${firstName(info.cands[0])} eleito${info.official ? "" : " (proj.)"}`; }
+  else if (info && info.kind === "runoff") head = `2º turno: ${info.cands.map(firstName).join(" × ")}${info.official ? "" : " (proj.)"}`;
+  else if (!info) {
+    const lead = r.cands.filter(c => c.votes > 0).slice(0, v.id === "sen" ? 2 : 1);
+    const done = r.cands.some(c => c.elected);
+    if (lead.length) head = `${done ? "Eleitos" : "Na frente"}: ${lead.map(firstName).join(", ")}${PROPORTIONAL.has(v.id) ? ` · ${r.seats} vagas` : ""}`;
+    if (done) cls = "ok";
+  }
+  return { label, cls, head, sub: prog };
+}
+
+function renderResumo() {
+  const cur = state.mode === "top3" ? state.t3 : state.active;
+  $("resumo").innerHTML = VIEWS.map(v => {
+    const x = resumoItem(v);
+    return `<button class="rs ${x.cls}" data-rs="${v.id}" aria-current="${v.id === cur}"><span class="k">${esc(x.label)}</span><span class="h">${esc(x.head)}</span><span class="s">${esc(x.sub)}</span></button>`;
+  }).join("");
+}
+
 function render() {
   const top = state.mode === "top3";
   $("tabs").hidden = top; $("panel").hidden = top; $("top3").hidden = !top; $("t3tabs").hidden = !top; $("t3search").hidden = !top;
   $("btnTop3").setAttribute("aria-pressed", String(top));
   $("btnTop3").textContent = top ? "Voltar ao detalhado" : "Painel Top 3";
   if (top) renderTop3(); else renderPanel();
+  renderResumo();
   renderStatus();
 }
 
@@ -520,6 +560,12 @@ $("refresh").addEventListener("click", refreshAll);
 const hashNow = () => "#" + (state.mode === "top3" ? "top3-" + state.t3 : state.active);
 $("btnTop3").addEventListener("click", () => {
   state.mode = state.mode === "top3" ? "detalhe" : "top3"; render();
+  try { history.replaceState(null, "", hashNow()); } catch (_) {}
+});
+$("resumo").addEventListener("click", e => {
+  const b = e.target.closest("[data-rs]"); if (!b) return;
+  if (state.mode === "top3") state.t3 = b.dataset.rs; else state.active = b.dataset.rs; if (state.mode !== "top3") renderTabs();
+  render();
   try { history.replaceState(null, "", hashNow()); } catch (_) {}
 });
 $("q").addEventListener("input", e => { state.q = e.target.value; if (state.mode === "top3") renderTop3(); });

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/tse/:path*", "destination": "https://resultados.tse.jus.br/:path*" },
+    { "source": "/tse-sim/:path*", "destination": "https://resultados-sim.tse.jus.br/:path*" }
+  ]
+}

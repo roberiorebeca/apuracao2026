@@ -1,0 +1,11 @@
+{
+  "name": "apuracao-eleicoes-2026",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Painel de apuração das eleições 2026 (Brasil e Mato Grosso) com dados do TSE",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "dev": "npx vercel dev"
+  }
+}

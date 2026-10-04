@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apuração 2026 – Mato Grosso e Brasil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: faixa de status no topo, abas por cargo, painel com totalização e barras por candidato */
+:root{
+  --bg:#f2f3ef; --surface:#ffffff; --fg:#14201c; --muted:#5b6a64; --line:#d9ded9;
+  --accent:#0b6b4f; --accent-soft:#d7ebe3; --bar:#0b6b4f; --bar-track:#e6eae6;
+  --gold:#b98600; --olive:#5f7f1f; --olive-ink:#ffffff; --ring-track:#ece8da;
+  --ok:#0b6b4f; --ok-bg:#d7ebe3; --warn:#8a5a00; --warn-bg:#f8e8c2; --bad:#9b2c2c; --bad-bg:#f6d9d9;
+  --font-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --font-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1714; --surface:#16211d; --fg:#e8efeb; --muted:#9db0a7; --line:#2a3a34;
+    --accent:#4fc79c; --accent-soft:#1d3a30; --bar:#4fc79c; --bar-track:#233029;
+    --gold:#f2c230; --olive:#9bc13f; --olive-ink:#10190a; --ring-track:#2a3a34;
+    --ok:#6fd8b0; --ok-bg:#1d3a30; --warn:#f0c15c; --warn-bg:#3a2f14; --bad:#f19a9a; --bad-bg:#3d1e1e;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1714; --surface:#16211d; --fg:#e8efeb; --muted:#9db0a7; --line:#2a3a34;
+  --accent:#4fc79c; --accent-soft:#1d3a30; --bar:#4fc79c; --bar-track:#233029;
+    --gold:#f2c230; --olive:#9bc13f; --olive-ink:#10190a; --ring-track:#2a3a34;
+  --ok:#6fd8b0; --ok-bg:#1d3a30; --warn:#f0c15c; --warn-bg:#3a2f14; --bad:#f19a9a; --bad-bg:#3d1e1e;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 var(--font-body);padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font:700 clamp(30px,5vw,46px)/1 var(--font-display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.status{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:13px}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.live .dot{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.live .dot{animation:none}}
+button,select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line)}
+.tab{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 14px;font:600 20px/1 var(--font-display);letter-spacing:.02em;color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.panel{display:flex;flex-direction:column;gap:18px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.stat .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat .v{font:700 30px/1.1 var(--font-display);font-variant-numeric:tabular-nums;margin-top:2px}
+.stat .s{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prog{height:8px;border-radius:4px;background:var(--bar-track);overflow:hidden;margin-top:8px}
+.prog>i{display:block;height:100%;background:var(--bar)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 16px 10px}
+.card h2{font:700 24px/1 var(--font-display);letter-spacing:.02em;margin:14px 0 6px}
+.note{color:var(--muted);font-size:14px;margin:0 0 6px}
+.cand{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;padding:12px 0;border-top:1px solid var(--line)}
+.cand:first-of-type{border-top:0}
+.cand .name{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.cand .name small{font-weight:400;color:var(--muted);margin-left:6px}
+.cand .num{font:700 24px/1 var(--font-display);text-align:right;font-variant-numeric:tabular-nums}
+.cand .votes{grid-column:2;text-align:right;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.cand .track{grid-column:1/-1;height:10px;background:var(--bar-track);border-radius:5px;overflow:hidden}
+.cand .track>i{display:block;height:100%;background:var(--bar);border-radius:5px}
+.tag{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:2px}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-top:0}
+td.r,th.r{text-align:right}
+.msg{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px}
+.msg.err{border-color:var(--bad)}
+.msg p{margin:6px 0 0}
+footer{color:var(--muted);font-size:13px}
+footer a{color:var(--accent)}
+
+[hidden]{display:none!important}
+/* ---- Painel Top 3 ---- */
+.top3{display:flex;flex-direction:column;gap:30px}
+.t3-sec{display:flex;flex-direction:column;gap:12px}
+.t3-label{align-self:flex-start;background:var(--olive);color:var(--olive-ink);font:700 22px/1 var(--font-display);letter-spacing:.03em;text-transform:uppercase;padding:8px 16px;border-radius:4px}
+.t3-row{display:grid;grid-template-columns:minmax(220px,290px) minmax(0,1fr);gap:16px;align-items:start}
+.t3-row.solo{grid-template-columns:minmax(0,1fr)}
+@media (max-width:820px){.t3-row{grid-template-columns:minmax(0,1fr)}}
+.t3-info{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.t3-info h3{font:700 22px/1 var(--font-display);margin:0 0 4px}
+.t3-info small{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
+.t3-kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-variant-numeric:tabular-nums}
+.t3-prog{position:relative;height:18px;border-radius:4px;background:var(--bar-track);overflow:hidden;margin:2px 0 6px}
+.t3-prog i{position:absolute;inset:0 auto 0 0;background:var(--olive)}
+.t3-prog span{position:relative;display:block;text-align:center;font:700 13px/18px var(--font-body)}
+.t3-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:700px){.t3-cards{grid-template-columns:minmax(0,1fr)}}
+.t3-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.t3-card.first{border-color:var(--gold)}
+.t3-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.t3-ring{--p:0;flex:none;width:92px;height:92px;border-radius:50%;padding:5px;background:conic-gradient(var(--gold) calc(var(--p) * 1%),var(--ring-track) 0)}
+.t3-ph{position:relative;width:100%;height:100%;border-radius:50%;background:var(--accent-soft);overflow:hidden;display:grid;place-items:center;font:700 28px/1 var(--font-display);color:var(--accent)}
+.t3-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.t3-pct{text-align:right;min-width:0}
+.t3-pct b{display:block;font:700 36px/1 var(--font-display);color:var(--gold);font-variant-numeric:tabular-nums}
+.t3-pct span{color:var(--muted);font-size:15px;font-variant-numeric:tabular-nums}
+.t3-party{font:600 13px/1.2 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.t3-name{font:700 27px/1.05 var(--font-display);text-transform:uppercase;overflow-wrap:anywhere}
+.t3-cards .msg{grid-column:1/-1}
+.tab .count{margin-left:8px;display:inline-block;min-width:24px;padding:2px 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font:700 13px/1.2 var(--font-body);text-align:center;vertical-align:3px}
+.t3-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.t3-count{color:var(--muted);font-size:16px}
+.t3-count b{font:700 30px/1 var(--font-display);color:var(--fg);margin-right:6px;font-variant-numeric:tabular-nums}
+.t3-sub{font:700 18px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.t3-note{color:var(--muted);font-size:14px;margin:10px 0 0}
+.t3-card.in{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.t3-restbox{margin-top:4px}
+.t3-rest{max-height:65vh;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.t3-rest th{position:sticky;top:0;background:var(--surface);z-index:1}
+.t3-rest td:nth-child(2){white-space:normal;min-width:180px}
+.t3-search{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:14px}
+.t3-search input{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px;width:min(100%,300px)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Apuração das Eleições 2026</h1>
+      <p class="sub">1º turno · domingo, 04/10/2026 · dados oficiais do TSE</p>
+    </div>
+    <div class="status" id="status" aria-live="polite"></div>
+  </header>
+
+  <div class="status">
+    <label for="src">Fonte dos dados</label>
+    <select id="src">
+      <option value="oficial">Oficial (resultados.tse.jus.br)</option>
+      <option value="simulado">Simulado do TSE (teste)</option>
+    </select>
+    <button id="refresh" type="button">Atualizar agora</button>
+    <button id="btnTop3" type="button" aria-pressed="false">Painel Top 3</button>
+    <button id="btnFull" type="button">Tela cheia</button>
+  </div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <main class="panel" id="panel"></main>
+  <div class="tabs" role="tablist" id="t3tabs" hidden></div>
+  <div class="t3-search" id="t3search" hidden><label for="q">Buscar candidato</label><input id="q" type="search" placeholder="Nome, partido ou número" autocomplete="off"></div>
+  <section class="top3" id="top3" hidden aria-label="Três mais votados por cargo"></section>
+
+  <footer>
+    Atualização automática a cada 60 segundos. Horários no fuso de Cuiabá (1 hora a menos que Brasília);
+    o TSE começa a divulgar às 17h de Brasília, ou 16h em Mato Grosso. Fonte:
+    <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">Portal Resultados do TSE</a>.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- Configuração ---------- */
+const REFRESH_SECONDS = 60;
+const UF = "mt";
+const SOURCES = {
+  oficial:  { base: "/tse/oficial/ele2026",               fed: 6257,  est: 6259 },
+  simulado: { base: "/tse-sim/simulado/simulado2026/ele2026", fed: 21270, est: 21272 }
+};
+const VIEWS = [
+  { id: "pres", label: "Presidente",       cargo: 1, scope: "br", elec: "fed", seats: 1, title: "Presidente da República · Brasil" },
+  { id: "gov",  label: "Governador MT",    cargo: 3, scope: UF,   elec: "est", seats: 1, title: "Governador · Mato Grosso" },
+  { id: "sen",  label: "Senador MT",       cargo: 5, scope: UF,   elec: "est", seats: 2, title: "Senador · Mato Grosso (2 vagas)" },
+  { id: "dep",  label: "Deputado Federal MT", cargo: 6, scope: UF, elec: "est", seats: 8, title: "Deputado Federal · Mato Grosso (8 vagas)" },
+  { id: "dest", label: "Deputado Estadual MT", cargo: 7, scope: UF, elec: "est", seats: 24, title: "Deputado Estadual · Mato Grosso (24 vagas)" }
+];
+const PROPORTIONAL = new Set(["dep", "dest"]);
+
+/* ---------- Funções puras (parser) ---------- */
+const toInt = v => { const n = parseInt(String(v ?? "0").replace(/\D/g, ""), 10); return Number.isFinite(n) ? n : 0; };
+const toPct = v => { const n = parseFloat(String(v ?? "0").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
+const fmtInt = n => n.toLocaleString("pt-BR");
+const fmtPct = n => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+
+function buildUrl(srcKey, view) {
+  const s = SOURCES[srcKey];
+  const cd = s[view.elec];
+  const cargo = "c" + String(view.cargo).padStart(4, "0");
+  const e = "e" + String(cd).padStart(6, "0");
+  return `${s.base}/${cd}/dados/${view.scope}/${view.scope}-${cargo}-${e}-u.json`;
+}
+
+function parseResult(json, view) {
+  const carg = (json.carg || []).find(c => String(c.cd) === String(view.cargo)) || (json.carg || [])[0];
+  const cands = [];
+  const parties = [];
+  if (carg) {
+    for (const agr of carg.agr || []) {
+      for (const par of agr.par || []) {
+        let sum = 0;
+        for (const c of par.cand || []) {
+          const votes = toInt(c.vap);
+          sum += votes;
+          cands.push({
+            number: c.n, sq: c.sqcand, name: c.nmu || c.nm, party: par.sg, votes,
+            pct: toPct(c.pvapn ?? c.pvap), elected: c.e === "s", status: c.st || "", validity: c.dvt || ""
+          });
+        }
+        parties.push({ party: par.sg, name: par.nm, candVotes: sum, legend: toInt(par.tvtl || par.tval), total: sum + toInt(par.tvtl || par.tval) });
+      }
+    }
+  }
+  cands.sort((a, b) => b.votes - a.votes);
+  parties.sort((a, b) => b.total - a.total);
+  const s = json.s || {}, e = json.e || {}, v = json.v || {};
+  return {
+    final: json.and === "f",
+    updated: [json.dt, json.ht].filter(Boolean).join(" "),
+    sectionsPct: toPct(s.pstn ?? s.pst), sectionsTotal: toInt(s.ts), sectionsDone: toInt(s.st),
+    voters: toInt(e.te), turnout: toInt(e.c), turnoutPct: toPct(e.pcn ?? e.pc), abstPct: toPct(e.pan ?? e.pa),
+    totalVotes: toInt(v.tv), valid: toInt(v.vvc), validPct: toPct(v.pvvcn ?? v.pvvc),
+    blank: toInt(v.vb), blankPct: toPct(v.pvbn ?? v.pvb), nulls: toInt(v.tvn), nullsPct: toPct(v.ptvnn ?? v.ptvn),
+    seats: toInt(carg && carg.nv) || view.seats, cands, parties
+  };
+}
+
+/* ---------- Estado e rede ---------- */
+const state = { src: "oficial", mode: "detalhe", t3: "pres", q: "", active: "pres", data: {}, lastOk: null, countdown: REFRESH_SECONDS, busy: false };
+try { const s = localStorage.getItem("apuracao.src"); if (s && SOURCES[s]) state.src = s; } catch (_) {}
+
+async function loadView(view) {
+  const url = buildUrl(state.src, view);
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.status === 404 || r.status === 403) return { kind: "wait", status: r.status, url };
+    if (!r.ok) return { kind: "error", message: "HTTP " + r.status, url };
+    const json = await r.json();
+    return { kind: "ok", result: parseResult(json, view), url };
+  } catch (err) {
+    return { kind: "error", message: String(err && err.message || err), url };
+  }
+}
+
+async function refreshAll() {
+  if (state.busy) return;
+  state.busy = true; renderStatus();
+  const results = await Promise.all(VIEWS.map(loadView));
+  VIEWS.forEach((v, i) => { state.data[v.id] = results[i]; });
+  if (results.some(r => r.kind === "ok")) state.lastOk = new Date();
+  state.busy = false; state.countdown = REFRESH_SECONDS;
+  render();
+}
+
+/* ---------- Renderização ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+function renderStatus() {
+  const d = state.data[state.mode === "top3" ? "pres" : state.active];
+  let pill = '<span class="pill warn"><i class="dot"></i>Aguardando dados</span>';
+  if (d && d.kind === "ok") pill = d.result.final
+    ? '<span class="pill"><i class="dot"></i>Totalização final</span>'
+    : '<span class="pill live"><i class="dot"></i>Apuração em andamento</span>';
+  if (d && d.kind === "error") pill = '<span class="pill bad"><i class="dot"></i>Falha na conexão</span>';
+  const last = state.lastOk ? "Última leitura " + state.lastOk.toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba" }) : "Sem leitura ainda";
+  $("status").innerHTML = pill + `<span>${last}</span><span>· próxima em ${state.busy ? "…" : state.countdown + "s"}</span>`;
+}
+
+function renderTabs() {
+  $("tabs").innerHTML = VIEWS.map(v =>
+    `<button class="tab" role="tab" id="tab-${v.id}" data-id="${v.id}" aria-selected="${v.id === state.active}">${esc(v.label)}</button>`).join("");
+}
+
+function statCards(r) {
+  return `<div class="stats">
+    <div class="stat"><div class="k">Seções apuradas</div><div class="v">${fmtPct(r.sectionsPct)}</div>
+      <div class="s">${fmtInt(r.sectionsDone)} de ${fmtInt(r.sectionsTotal)}</div><div class="prog"><i style="width:${Math.min(100, r.sectionsPct)}%"></i></div></div>
+    <div class="stat"><div class="k">Comparecimento</div><div class="v">${fmtPct(r.turnoutPct)}</div><div class="s">${fmtInt(r.turnout)} de ${fmtInt(r.voters)} eleitores</div></div>
+    <div class="stat"><div class="k">Votos válidos</div><div class="v">${fmtInt(r.valid)}</div><div class="s">${fmtPct(r.validPct)} dos votos apurados</div></div>
+    <div class="stat"><div class="k">Brancos</div><div class="v">${fmtInt(r.blank)}</div><div class="s">${fmtPct(r.blankPct)}</div></div>
+    <div class="stat"><div class="k">Nulos</div><div class="v">${fmtInt(r.nulls)}</div><div class="s">${fmtPct(r.nullsPct)}</div></div>
+  </div>`;
+}
+
+function tagFor(c) {
+  if (c.elected) {
+    const lbl = /2º/.test(c.status) ? "2º turno" : (c.status || "Eleito");
+    return `<span class="tag ${/2º/.test(c.status) ? "warn" : "ok"}">${esc(lbl)}</span>`;
+  }
+  if (/Anulado/i.test(c.validity)) return `<span class="tag warn">${esc(c.validity)}</span>`;
+  return "";
+}
+
+function candRows(list, scaleMax) {
+  return list.map(c => `<div class="cand">
+    <div class="name">${esc(c.name)}<small>${esc(c.party)} · ${esc(c.number)}</small>${tagFor(c)}</div>
+    <div class="num">${fmtPct(c.pct)}</div>
+    <div class="track"><i style="width:${scaleMax ? Math.max(1, c.votes / scaleMax * 100) : 0}%"></i></div>
+    <div class="votes">${fmtInt(c.votes)} votos</div>
+  </div>`).join("");
+}
+
+function renderPanel() {
+  const view = VIEWS.find(v => v.id === state.active);
+  const d = state.data[state.active];
+  const el = $("panel");
+  if (!d) { el.innerHTML = '<div class="msg">Carregando…</div>'; return; }
+  if (d.kind === "wait") {
+    el.innerHTML = `<div class="msg"><strong>Resultados ainda não publicados para ${esc(view.title)}.</strong>
+      <p>O TSE começa a divulgar às 17h de Brasília (16h em Mato Grosso) de 04/10/2026. Esta página continua tentando a cada minuto.
+      Para testar o painel agora, escolha “Simulado do TSE” em Fonte dos dados.</p></div>`;
+    return;
+  }
+  if (d.kind === "error") {
+    el.innerHTML = `<div class="msg err"><strong>Não foi possível ler os dados do TSE.</strong>
+      <p>${esc(d.message)}. Verifique a conexão e confira o repasse (rewrites) no vercel.json. Enquanto isso, consulte o
+      <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">Portal Resultados</a>.</p></div>`;
+    return;
+  }
+  const r = d.result;
+  let body = "";
+  if (PROPORTIONAL.has(view.id)) {
+    const elected = r.cands.filter(c => c.elected);
+    const topN = view.id === "dest" ? 40 : 30;
+    const top = r.cands.slice(0, topN);
+    const max = top.length ? top[0].votes : 0;
+    body = `<div class="card"><h2>Mais votados</h2><p class="note">Os ${topN} candidatos com mais votos. As ${r.seats} vagas são distribuídas por quociente partidário, então os mais votados não são necessariamente os eleitos.${elected.length ? ` Eleitos até agora: ${elected.length}.` : ""}</p>${candRows(top, max)}</div>
+    <div class="card"><h2>Votos por partido</h2><div class="tbl"><table><thead><tr><th>Partido</th><th class="r">Votos nominais</th><th class="r">Legenda</th><th class="r">Total</th></tr></thead><tbody>${
+      r.parties.slice(0, 20).map(p => `<tr><td>${esc(p.party)}</td><td class="r">${fmtInt(p.candVotes)}</td><td class="r">${fmtInt(p.legend)}</td><td class="r"><strong>${fmtInt(p.total)}</strong></td></tr>`).join("")
+    }</tbody></table></div></div>`;
+    if (elected.length) body += `<div class="card"><h2>Eleitos</h2><div class="tbl"><table><tbody>${
+      elected.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.party)}</td><td class="r">${fmtInt(c.votes)}</td></tr>`).join("")}</tbody></table></div></div>`;
+  } else {
+    const max = r.cands.length ? r.cands[0].votes : 0;
+    const note = view.id === "pres" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
+      : view.id === "gov" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
+      : "Cada eleitor vota em dois candidatos; vencem os dois mais votados. O percentual é calculado sobre os votos válidos.";
+    body = `<div class="card"><h2>${esc(view.title)}</h2><p class="note">${note}</p>${candRows(r.cands, max)}</div>`;
+  }
+  el.innerHTML = statCards(r) + body +
+    `<p class="note">Totalização gerada pelo TSE em ${esc(r.updated || "—")} (horário de Brasília).</p>`;
+}
+
+
+/* ---------- Painel Top 3 ---------- */
+const T3_TAB = { pres: "Presidente", gov: "Governador", sen: "Senador", dep: "Dep. Federal", dest: "Dep. Estadual" };
+const T3_LABEL = { pres: "Presidente", gov: "Governador · MT", sen: "Senador · MT", dep: "Deputado Federal · MT", dest: "Deputado Estadual · MT" };
+
+function photoUrl(view, c) {
+  const s = SOURCES[state.src];
+  return `${s.base}/${s[view.elec]}/fotos/${view.scope}/${c.sq}.jpeg`;
+}
+
+function t3Match(c) {
+  const q = state.q.trim().toLowerCase();
+  return !q || `${c.name} ${c.party} ${c.number}`.toLowerCase().includes(q);
+}
+
+/* Destaque: se o TSE já marcou eleitos, vale o que o TSE informa; senão, os N mais votados (N = vagas). */
+function t3Plan(r) {
+  const anyElected = r.cands.some(c => c.elected);
+  return r.cands.map((c, i) => ({
+    c, rank: i + 1,
+    hi: anyElected ? c.elected : (i < r.seats && c.votes > 0),
+    prov: !anyElected
+  }));
+}
+
+function t3Card(view, row) {
+  const c = row.c;
+  const ini = String(c.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const img = c.sq ? `<img class="foto" alt="" loading="lazy" src="${esc(photoUrl(view, c))}">` : "";
+  const chip = c.elected ? tagFor(c) : `<span class="tag ok">Dentro das vagas</span>${tagFor(c)}`;
+  return `<article class="t3-card in">
+    <div class="t3-head">
+      <div class="t3-ring" style="--p:${Math.min(100, c.pct)}"><div class="t3-ph">${esc(ini)}${img}</div></div>
+      <div class="t3-pct"><b>${fmtPct(c.pct)}</b><span>${fmtInt(c.votes)} votos</span></div>
+    </div>
+    <div class="t3-party">${row.rank}º · ${esc(c.party)} – ${esc(c.number)}${chip}</div>
+    <div class="t3-name">${esc(c.name)}</div>
+  </article>`;
+}
+
+function t3Note(view, r, plan) {
+  const prov = plan.length && plan[0].prov;
+  if (view.id === "pres" || view.id === "gov")
+    return "Vence quem tiver mais de 50% dos votos válidos; se ninguém passar disso, haverá 2º turno em 25/10." + (prov ? " Destaque pelos votos atuais." : "");
+  if (view.id === "sen") return prov ? "Os 2 mais votados são eleitos. Destaque pelos votos atuais." : "Destaque segue os eleitos informados pelo TSE.";
+  return prov
+    ? `Destaque pelos ${r.seats} candidatos mais votados no momento. A distribuição final das vagas depende do quociente eleitoral e partidário, então pode mudar quando a apuração terminar.`
+    : "Destaque segue os eleitos informados pelo TSE.";
+}
+
+function t3Section(view) {
+  const d = state.data[view.id];
+  let label = `<span class="t3-label">${esc(T3_LABEL[view.id])}</span>`;
+  if (!d) return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">Carregando…</div></div></section>`;
+  if (d.kind === "wait") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">Resultados ainda não publicados para este cargo.</div></div></section>`;
+  if (d.kind === "error") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg err">Falha ao ler os dados do TSE: ${esc(d.message)}</div></div></section>`;
+
+  const r = d.result, plan = t3Plan(r);
+  const hi = plan.filter(x => x.hi), rest = plan.filter(x => !x.hi);
+  const hiShow = hi.filter(x => t3Match(x.c)), restShow = rest.filter(x => t3Match(x.c));
+  const n = r.cands.length;
+  label = `<div class="t3-top">${label}<span class="t3-count"><b>${fmtInt(n)}</b>${n === 1 ? "candidato" : "candidatos"} para ${fmtInt(r.seats)} ${r.seats === 1 ? "vaga" : "vagas"}</span></div>`;
+
+  const subtitle = hi.length
+    ? `Dentro das vagas · ${fmtInt(hi.length)}${hi[0].prov ? " (pelos votos atuais)" : " (eleitos)"}`
+    : "Dentro das vagas";
+  const cards = hiShow.length
+    ? hiShow.map(x => t3Card(view, x)).join("")
+    : `<div class="msg">${hi.length ? "Nenhum candidato em destaque corresponde à busca." : "Nenhum voto apurado ainda. Os destaques aparecem quando houver votos."}</div>`;
+
+  const rows = restShow.map(x => `<tr><td class="r">${x.rank}º</td><td>${esc(x.c.name)}${tagFor(x.c)}</td><td>${esc(x.c.party)} · ${esc(x.c.number)}</td><td class="r">${fmtInt(x.c.votes)}</td><td class="r">${fmtPct(x.c.pct)}</td></tr>`).join("");
+  const q = state.q.trim();
+  const restTitle = `Demais candidatos · ${fmtInt(q ? restShow.length : rest.length)}${q ? " encontrados" : ""}`;
+  const restBox = rest.length ? `<div class="t3-restbox"><div class="t3-sub">${restTitle}</div>
+      <div class="t3-rest"><table><thead><tr><th class="r">#</th><th>Candidato</th><th>Partido · Nº</th><th class="r">Votos</th><th class="r">%</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">Nenhum candidato corresponde à busca.</td></tr>'}</tbody></table></div></div>` : "";
+
+  const info = `<div class="t3-info"><h3>Dados gerais</h3><small>Última atualização ${esc(r.updated || "—")} (Brasília)</small>
+      <div class="t3-kv"><span>Candidatos</span><b>${fmtInt(n)}</b></div>
+      <div class="t3-kv"><span>Número de vagas</span><b>${r.seats}</b></div>
+      <div class="t3-kv"><span>Em destaque</span><b>${fmtInt(hi.length)}</b></div>
+      <div class="t3-kv"><span>Total de seções</span><b>${fmtInt(r.sectionsTotal)}</b></div>
+      <div class="t3-kv"><span>Seções totalizadas</span><b>${fmtInt(r.sectionsDone)}</b></div>
+      <div class="t3-prog"><i style="width:${Math.min(100, r.sectionsPct)}%"></i><span>${fmtPct(r.sectionsPct)}</span></div>
+      <div class="t3-kv"><span>Brancos</span><b>${fmtPct(r.blankPct)}</b></div>
+      <div class="t3-kv"><span>Nulos</span><b>${fmtPct(r.nullsPct)}</b></div>
+    </div>`;
+  return `<section class="t3-sec">${label}
+    <div class="t3-row">${info}<div><div class="t3-sub">${esc(subtitle)}</div><div class="t3-cards">${cards}</div><p class="t3-note">${esc(t3Note(view, r, plan))}</p></div></div>
+    ${restBox}</section>`;
+}
+
+function renderTop3() {
+  const keep = document.querySelector(".t3-rest");
+  const scroll = keep ? keep.scrollTop : 0;
+  $("t3tabs").innerHTML = VIEWS.map(v => {
+    const d = state.data[v.id];
+    const n = d && d.kind === "ok" ? `<span class="count" title="Candidatos">${fmtInt(d.result.cands.length)}</span>` : "";
+    return `<button class="tab" role="tab" data-t3="${v.id}" aria-selected="${v.id === state.t3}">${esc(T3_TAB[v.id])}${n}</button>`;
+  }).join("");
+  const view = VIEWS.find(v => v.id === state.t3) || VIEWS[0];
+  $("top3").innerHTML = t3Section(view);
+  const box = document.querySelector(".t3-rest");
+  if (box) box.scrollTop = scroll;
+}
+
+function render() {
+  const top = state.mode === "top3";
+  $("tabs").hidden = top; $("panel").hidden = top; $("top3").hidden = !top; $("t3tabs").hidden = !top; $("t3search").hidden = !top;
+  $("btnTop3").setAttribute("aria-pressed", String(top));
+  $("btnTop3").textContent = top ? "Voltar ao detalhado" : "Painel Top 3";
+  if (top) renderTop3(); else renderPanel();
+  renderStatus();
+}
+
+/* ---------- Eventos ---------- */
+$("tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab"); if (!b) return;
+  state.active = b.dataset.id; renderTabs(); render();
+  try { history.replaceState(null, "", "#" + state.active); } catch (_) {}
+});
+$("src").addEventListener("change", e => {
+  state.src = e.target.value; state.data = {};
+  try { localStorage.setItem("apuracao.src", state.src); } catch (_) {}
+  render(); refreshAll();
+});
+$("refresh").addEventListener("click", refreshAll);
+const hashNow = () => "#" + (state.mode === "top3" ? "top3-" + state.t3 : state.active);
+$("btnTop3").addEventListener("click", () => {
+  state.mode = state.mode === "top3" ? "detalhe" : "top3"; render();
+  try { history.replaceState(null, "", hashNow()); } catch (_) {}
+});
+$("q").addEventListener("input", e => { state.q = e.target.value; if (state.mode === "top3") renderTop3(); });
+$("t3tabs").addEventListener("click", e => {
+  const b = e.target.closest("[data-t3]"); if (!b) return;
+  state.t3 = b.dataset.t3; render();
+  try { history.replaceState(null, "", hashNow()); } catch (_) {}
+});
+$("btnFull").addEventListener("click", () => {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  } catch (_) {}
+});
+/* foto indisponível: some a imagem e fica a inicial */
+document.addEventListener("error", e => {
+  if (e.target && e.target.tagName === "IMG" && e.target.classList.contains("foto")) e.target.remove();
+}, true);
+
+/* ---------- Início ---------- */
+(function init() {
+  const h = location.hash.replace("#", "");
+  if (h.startsWith("top3")) { state.mode = "top3"; const k = h.split("-")[1]; if (VIEWS.some(v => v.id === k)) state.t3 = k; }
+  else if (VIEWS.some(v => v.id === h)) state.active = h;
+  $("src").value = state.src;
+  renderTabs(); render();
+  refreshAll();
+  setInterval(() => {
+    if (state.busy) return;
+    state.countdown -= 1;
+    if (state.countdown <= 0) refreshAll(); else renderStatus();
+  }, 1000);
+})();
+</script>
+</body>
+</html>

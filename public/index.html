@@ -121,6 +121,10 @@ footer a{color:var(--accent)}
 .t3-count{color:var(--muted);font-size:16px}
 .t3-count b{font:700 30px/1 var(--font-display);color:var(--fg);margin-right:6px;font-variant-numeric:tabular-nums}
 .t3-sub{font:700 18px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.banner{border:1px solid var(--line,#444);border-radius:10px;padding:12px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:4px}
+.banner.ok{background:var(--ok-bg);color:var(--ok)}
+.banner.warn{background:var(--warn-bg);color:var(--warn)}
+.banner strong{font-size:17px}.banner small{opacity:.85}
 .t3-note{color:var(--muted);font-size:14px;margin:10px 0 0}
 .t3-card.in{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 .t3-restbox{margin-top:4px}
@@ -325,13 +329,13 @@ function renderPanel() {
     return;
   }
   const r = d.result;
-  let body = "";
+  let body = runoffBanner(view, r);
   if (PROPORTIONAL.has(view.id)) {
     const elected = r.cands.filter(c => c.elected);
     const topN = view.id === "dest" ? 40 : 30;
     const top = r.cands.slice(0, topN);
     const max = top.length ? top[0].votes : 0;
-    body = `<div class="card"><h2>Mais votados</h2><p class="note">Os ${topN} candidatos com mais votos. As ${r.seats} vagas são distribuídas por quociente partidário, então os mais votados não são necessariamente os eleitos.${elected.length ? ` Eleitos até agora: ${elected.length}.` : ""}</p>${candRows(top, max)}</div>
+    body += `<div class="card"><h2>Mais votados</h2><p class="note">Os ${topN} candidatos com mais votos. As ${r.seats} vagas são distribuídas por quociente partidário, então os mais votados não são necessariamente os eleitos.${elected.length ? ` Eleitos até agora: ${elected.length}.` : ""}</p>${candRows(top, max)}</div>
     <div class="card"><h2>Votos por partido</h2><div class="tbl"><table><thead><tr><th>Partido</th><th class="r">Votos nominais</th><th class="r">Legenda</th><th class="r">Total</th></tr></thead><tbody>${
       r.parties.slice(0, 20).map(p => `<tr><td>${esc(p.party)}</td><td class="r">${fmtInt(p.candVotes)}</td><td class="r">${fmtInt(p.legend)}</td><td class="r"><strong>${fmtInt(p.total)}</strong></td></tr>`).join("")
     }</tbody></table></div></div>`;
@@ -342,7 +346,7 @@ function renderPanel() {
     const note = view.id === "pres" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
       : view.id === "gov" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
       : "Cada eleitor vota em dois candidatos; vencem os dois mais votados. O percentual é calculado sobre os votos válidos.";
-    body = `<div class="card"><h2>${esc(view.title)}</h2><p class="note">${note}</p>${candRows(r.cands, max)}</div>`;
+    body += `<div class="card"><h2>${esc(view.title)}</h2><p class="note">${note}</p>${candRows(r.cands, max)}</div>`;
   }
   el.innerHTML = statCards(r) + body +
     `<p class="note">Totalização gerada pelo TSE em ${esc(r.updated || "—")} (horário de Brasília).</p>`;
@@ -364,7 +368,42 @@ function t3Match(c) {
 }
 
 /* Destaque: se o TSE já marcou eleitos, vale o que o TSE informa; senão, os N mais votados (N = vagas). */
-function t3Plan(r) {
+const MAJORITARIAN_RUNOFF = new Set(["pres", "gov"]);
+const isRunoff = c => /2º/.test(c.status || "");
+
+/* Situação de Presidente/Governador: eleito no 1º turno, 2º turno ou em aberto.
+   Usa o que o TSE informa; sem isso, projeta pelos votos atuais (>50% dos válidos = vitória; senão, os 2 primeiros). */
+function runoffInfo(view, r) {
+  if (!MAJORITARIAN_RUNOFF.has(view.id) || !r.cands.length) return null;
+  const off2 = r.cands.filter(isRunoff);
+  if (off2.length) return { kind: "runoff", cands: off2, official: true };
+  const won = r.cands.filter(c => c.elected);
+  if (won.length) return { kind: "won", cands: won.slice(0, 1), official: true };
+  const [a, b] = r.cands;
+  if (!a || a.votes <= 0) return { kind: "open", cands: [], official: false };
+  if (a.pct > 50) return { kind: "won", cands: [a], official: false };
+  return { kind: "runoff", cands: b && b.votes > 0 ? [a, b] : [a], official: false };
+}
+
+function runoffBanner(view, r) {
+  const info = runoffInfo(view, r);
+  if (!info || info.kind === "open") return "";
+  const who = info.cands.map(c => `<b>${esc(c.name)}</b> (${esc(c.party)} ${esc(c.number)}) ${fmtPct(c.pct)}`).join(" e ");
+  const cargo = view.id === "pres" ? "Presidente" : "Governador";
+  const cls = info.kind === "won" ? "ok" : "warn";
+  const head = info.kind === "won"
+    ? (info.official ? `${cargo} eleito no 1º turno` : `Projeção: ${cargo} eleito no 1º turno (mais de 50% dos válidos)`)
+    : (info.official ? `Classificados para o 2º turno (25/10)` : `Projeção: 2º turno em 25/10 — nenhum candidato passou de 50% dos válidos`);
+  const foot = info.official ? "" : `<small>Projeção pelos votos apurados até agora (${fmtPct(r.sectionsPct)} das seções); pode mudar. O resultado oficial é o informado pelo TSE.</small>`;
+  return `<div class="banner ${cls}"><strong>${head}</strong><span>${who}</span>${foot}</div>`;
+}
+
+function t3Plan(r, view) {
+  const info = view && runoffInfo(view, r);
+  if (info && info.kind !== "open") {
+    const ids = new Set(info.cands.map(c => c.sq || c.number));
+    return r.cands.map((c, i) => ({ c, rank: i + 1, hi: ids.has(c.sq || c.number), prov: !info.official, runoff: info.kind === "runoff" }));
+  }
   const anyElected = r.cands.some(c => c.elected);
   return r.cands.map((c, i) => ({
     c, rank: i + 1,
@@ -377,7 +416,8 @@ function t3Card(view, row) {
   const c = row.c;
   const ini = String(c.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
   const img = c.sq ? `<img class="foto" alt="" loading="lazy" src="${esc(photoUrl(view, c))}">` : "";
-  const chip = c.elected ? tagFor(c) : `<span class="tag ok">Dentro das vagas</span>${tagFor(c)}`;
+  const chip = row.runoff ? `<span class="tag warn">${row.prov ? "Projeção 2º turno" : "2º turno"}</span>`
+    : c.elected ? tagFor(c) : `<span class="tag ok">Dentro das vagas</span>${tagFor(c)}`;
   return `<article class="t3-card in">
     <div class="t3-head">
       <div class="t3-ring" style="--p:${Math.min(100, c.pct)}"><div class="t3-ph">${esc(ini)}${img}</div></div>
@@ -405,13 +445,15 @@ function t3Section(view) {
   if (d.kind === "wait") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">Resultados ainda não publicados para este cargo.</div></div></section>`;
   if (d.kind === "error") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg err">Falha ao ler os dados do TSE: ${esc(d.message)}</div></div></section>`;
 
-  const r = d.result, plan = t3Plan(r);
+  const r = d.result, plan = t3Plan(r, view);
   const hi = plan.filter(x => x.hi), rest = plan.filter(x => !x.hi);
   const hiShow = hi.filter(x => t3Match(x.c)), restShow = rest.filter(x => t3Match(x.c));
   const n = r.cands.length;
   label = `<div class="t3-top">${label}<span class="t3-count"><b>${fmtInt(n)}</b>${n === 1 ? "candidato" : "candidatos"} para ${fmtInt(r.seats)} ${r.seats === 1 ? "vaga" : "vagas"}</span></div>`;
 
-  const subtitle = hi.length
+  const subtitle = hi.length && hi[0].runoff
+    ? `Classificados para o 2º turno${hi[0].prov ? " (projeção pelos votos atuais)" : ""}`
+    : hi.length
     ? `Dentro das vagas · ${fmtInt(hi.length)}${hi[0].prov ? " (pelos votos atuais)" : " (eleitos)"}`
     : "Dentro das vagas";
   const cards = hiShow.length
@@ -436,7 +478,7 @@ function t3Section(view) {
       <div class="t3-kv"><span>Nulos</span><b>${fmtPct(r.nullsPct)}</b></div>
     </div>`;
   return `<section class="t3-sec">${label}
-    <div class="t3-row">${info}<div><div class="t3-sub">${esc(subtitle)}</div><div class="t3-cards">${cards}</div><p class="t3-note">${esc(t3Note(view, r, plan))}</p></div></div>
+    <div class="t3-row">${info}<div>${runoffBanner(view, r)}<div class="t3-sub">${esc(subtitle)}</div><div class="t3-cards">${cards}</div><p class="t3-note">${esc(t3Note(view, r, plan))}</p></div></div>
     ${restBox}</section>`;
 }
 

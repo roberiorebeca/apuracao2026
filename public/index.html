@@ -250,7 +250,11 @@ try { const s = localStorage.getItem("apuracao.src"); if (s && SOURCES[s]) state
 async function loadView(view) {
   const url = buildUrl(state.src, view);
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    let r = await fetch(url, { cache: "no-store" });
+    for (let i = 0; i < 2 && (r.status === 429 || r.status >= 500); i++) {   // limite/instabilidade: tenta de novo com pausa
+      await new Promise(ok => setTimeout(ok, 2500 * (i + 1)));
+      r = await fetch(url, { cache: "no-store" });
+    }
     if (r.status === 404 || r.status === 403) return { kind: "wait", status: r.status, url };
     if (!r.ok) return { kind: "error", message: "HTTP " + r.status, url };
     const json = await r.json();
@@ -264,7 +268,11 @@ async function refreshAll() {
   if (state.busy) return;
   state.busy = true; renderStatus();
   const results = await Promise.all(VIEWS.map(loadView));
-  VIEWS.forEach((v, i) => { state.data[v.id] = results[i]; });
+  VIEWS.forEach((v, i) => {
+    const prev = state.data[v.id], nu = results[i];
+    // falha passageira: mantém a última leitura boa na tela em vez de apagar tudo
+    state.data[v.id] = (nu.kind === "error" && prev && (prev.kind === "ok")) ? { ...prev, stale: nu.message } : nu;
+  });
   if (results.some(r => r.kind === "ok")) state.lastOk = new Date();
   state.busy = false; state.countdown = REFRESH_SECONDS;
   render();
@@ -280,6 +288,7 @@ function renderStatus() {
   if (d && d.kind === "ok") pill = d.result.final
     ? '<span class="pill"><i class="dot"></i>Totalização final</span>'
     : '<span class="pill live"><i class="dot"></i>Apuração em andamento</span>';
+  if (d && d.kind === "ok" && d.stale) pill = `<span class="pill warn"><i class="dot"></i>Última leitura mantida (${esc(d.stale)})</span>`;
   if (d && d.kind === "error") pill = '<span class="pill bad"><i class="dot"></i>Falha na conexão</span>';
   const last = state.lastOk ? "Última leitura " + state.lastOk.toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba" }) : "Sem leitura ainda";
   $("status").innerHTML = pill + `<span>${last}</span><span>· próxima em ${state.busy ? "…" : state.countdown + "s"}</span>`;

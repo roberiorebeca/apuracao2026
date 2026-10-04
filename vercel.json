@@ -3,7 +3,33 @@
   "framework": null,
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/tse/:path*", "destination": "https://resultados.tse.jus.br/:path*" },
-    { "source": "/tse-sim/:path*", "destination": "https://resultados-sim.tse.jus.br/:path*" }
+    {
+      "source": "/tse/:path*",
+      "destination": "https://resultados.tse.jus.br/:path*"
+    },
+    {
+      "source": "/tse-sim/:path*",
+      "destination": "https://resultados-sim.tse.jus.br/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/tse/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=20, stale-while-revalidate=40"
+        }
+      ]
+    },
+    {
+      "source": "/tse-sim/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=20, stale-while-revalidate=40"
+        }
+      ]
+    }
   ]
 }

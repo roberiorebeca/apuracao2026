@@ -247,14 +247,26 @@ function parseResult(json, view) {
 const state = { src: "oficial", mode: "detalhe", t3: "pres", q: "", active: "pres", data: {}, lastOk: null, countdown: REFRESH_SECONDS, busy: false };
 try { const s = localStorage.getItem("apuracao.src"); if (s && SOURCES[s]) state.src = s; } catch (_) {}
 
+/* O TSE libera CORS: lê direto do navegador (IP de cada visitante, sem dividir limite). O proxy do Vercel fica de reserva. */
+const DIRECT = { "/tse/": "https://resultados.tse.jus.br/", "/tse-sim/": "https://resultados-sim.tse.jus.br/" };
+function directUrl(u) {
+  for (const k in DIRECT) if (u.startsWith(k)) return DIRECT[k] + u.slice(k.length);
+  return null;
+}
+async function fetchTry(url) {
+  let r = await fetch(url, { cache: "no-store" });
+  for (let i = 0; i < 2 && (r.status === 429 || r.status >= 500); i++) {
+    await new Promise(ok => setTimeout(ok, 2500 * (i + 1)));
+    r = await fetch(url, { cache: "no-store" });
+  }
+  return r;
+}
 async function loadView(view) {
-  const url = buildUrl(state.src, view);
+  const url = buildUrl(state.src, view), direct = directUrl(url);
   try {
-    let r = await fetch(url, { cache: "no-store" });
-    for (let i = 0; i < 2 && (r.status === 429 || r.status >= 500); i++) {   // limite/instabilidade: tenta de novo com pausa
-      await new Promise(ok => setTimeout(ok, 2500 * (i + 1)));
-      r = await fetch(url, { cache: "no-store" });
-    }
+    let r = null;
+    if (direct) { try { r = await fetch(direct, { cache: "no-store" }); } catch (_) { r = null; } }
+    if (!r || r.status === 429 || r.status >= 500) r = await fetchTry(url);   // reserva: proxy
     if (r.status === 404 || r.status === 403) return { kind: "wait", status: r.status, url };
     if (!r.ok) return { kind: "error", message: "HTTP " + r.status, url };
     const json = await r.json();
@@ -263,7 +275,6 @@ async function loadView(view) {
     return { kind: "error", message: String(err && err.message || err), url };
   }
 }
-
 async function refreshAll() {
   if (state.busy) return;
   state.busy = true; renderStatus();
@@ -376,7 +387,8 @@ const T3_LABEL = { pres: "Presidente", gov: "Governador · MT", sen: "Senador ·
 
 function photoUrl(view, c) {
   const s = SOURCES[state.src];
-  return `${s.base}/${s[view.elec]}/fotos/${view.scope}/${c.sq}.jpeg`;
+  const u = `${s.base}/${s[view.elec]}/fotos/${view.scope}/${c.sq}.jpeg`;
+  return directUrl(u) || u;
 }
 
 function t3Match(c) {

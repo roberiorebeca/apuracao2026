@@ -128,6 +128,33 @@ footer a{color:var(--accent)}
 .rs .h{font-weight:700;font-size:15px;line-height:1.25}
 .rs .s{font-size:12px;color:var(--muted)}
 .rs.ok{border-left-color:var(--ok)}.rs.warn{border-left-color:var(--warn)}.rs.wait{border-left-color:var(--line)}
+
+.telao{position:fixed;inset:0;z-index:50;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;padding:2.2vh 3vw;gap:1.6vh;overflow:hidden}
+.telao[hidden]{display:none}
+.tl-top{display:flex;align-items:center;justify-content:space-between;gap:2vw}
+.tl-title{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:clamp(28px,5.2vh,64px);text-transform:uppercase;line-height:1}
+.tl-meta{display:flex;align-items:center;gap:1.4vw;color:var(--muted);font-size:clamp(14px,2.4vh,26px)}
+.tl-clock{font-weight:700;color:var(--fg);font-variant-numeric:tabular-nums}
+.tl-x{font-size:clamp(14px,2.2vh,22px);padding:.6vh 1.2vw}
+.tl-prog{height:1.2vh;background:var(--bar-track);border-radius:99px;overflow:hidden;position:relative}
+.tl-prog i{display:block;height:100%;background:var(--bar)}
+.tl-sub{display:flex;gap:2vw;flex-wrap:wrap;align-items:baseline;font-size:clamp(16px,3vh,34px)}
+.tl-sub b{font-size:1.5em}
+.tl-ban{border-radius:1.2vh;padding:1.6vh 1.6vw;font-size:clamp(18px,3.4vh,40px);font-weight:700}
+.tl-ban.ok{background:var(--ok-bg);color:var(--ok)}.tl-ban.warn{background:var(--warn-bg);color:var(--warn)}
+.tl-ban small{display:block;font-weight:400;font-size:.55em;opacity:.85}
+.tl-grid{flex:1;min-height:0;display:grid;gap:1.4vh 1.2vw;align-content:start;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:1fr}
+.tl-c{background:var(--surface);border:2px solid var(--warn);border-radius:1.4vh;display:flex;align-items:center;gap:1vw;padding:1.2vh 1vw;min-width:0;overflow:hidden}
+.tl-ph{flex:none;width:var(--ph);height:var(--ph);border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:calc(var(--ph)/3);position:relative;overflow:hidden}
+.tl-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tl-t{min-width:0;display:flex;flex-direction:column}
+.tl-n{font-family:"Barlow Condensed",sans-serif;font-weight:700;text-transform:uppercase;line-height:1.05;font-size:var(--fn);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tl-p{color:var(--muted);font-size:var(--fs)}
+.tl-v{font-weight:700;font-size:var(--fv);color:var(--warn);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-v small{font-weight:400;color:var(--muted);font-size:.55em;margin-left:.5em}
+.tl-dots{display:flex;gap:.8vw;justify-content:center}
+.tl-dots i{width:1.2vh;height:1.2vh;border-radius:50%;background:var(--bar-track)}
+.tl-dots i.on{background:var(--accent)}
 .banner{border:1px solid var(--line,#444);border-radius:10px;padding:12px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:4px}
 .banner.ok{background:var(--ok-bg);color:var(--ok)}
 .banner.warn{background:var(--warn-bg);color:var(--warn)}
@@ -160,6 +187,7 @@ footer a{color:var(--accent)}
     </select>
     <button id="refresh" type="button">Atualizar agora</button>
     <button id="btnTop3" type="button" aria-pressed="false">Painel Top 3</button>
+    <button id="btnTelao" type="button">Modo telão</button>
     <button id="btnFull" type="button">Tela cheia</button>
   </div>
 
@@ -177,6 +205,7 @@ footer a{color:var(--accent)}
   </footer>
 </div>
 
+<div id="telao" class="telao" hidden role="dialog" aria-label="Modo telão"></div>
 <script>
 "use strict";
 /* ---------- Configuração ---------- */
@@ -564,6 +593,7 @@ function render() {
   if (top) renderTop3(); else renderPanel();
   renderResumo();
   renderStatus();
+  telaoRender();
 }
 
 /* ---------- Eventos ---------- */
@@ -606,6 +636,75 @@ document.addEventListener("error", e => {
   if (e.target && e.target.tagName === "IMG" && e.target.classList.contains("foto")) e.target.remove();
 }, true);
 
+/* ---------- Modo telão: tela cheia, sem menus, troca de cargo sozinha ---------- */
+const TELAO_SECONDS = 15;
+const tl = { open: false, idx: 0, left: TELAO_SECONDS, paused: false, timer: null };
+
+function telaoSizes(n) {
+  // cartões menores quanto mais destaques (24 deputados estaduais cabem na tela)
+  if (n <= 2)  return { cols: 2, ph: "16vh", fn: "5.6vh", fs: "2.6vh", fv: "5.6vh" };
+  if (n <= 8)  return { cols: 2, ph: "11vh", fn: "3.8vh", fs: "2.1vh", fv: "4vh" };
+  if (n <= 12) return { cols: 3, ph: "8.5vh", fn: "3vh",  fs: "1.8vh", fv: "3.2vh" };
+  return { cols: 4, ph: "7vh", fn: "2.4vh", fs: "1.5vh", fv: "2.5vh" };
+}
+
+function telaoRender() {
+  if (!tl.open) return;
+  const view = VIEWS[tl.idx], d = state.data[view.id], el = $("telao");
+  const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const dots = VIEWS.map((_, i) => `<i class="${i === tl.idx ? "on" : ""}"></i>`).join("");
+  const top = (sub, body) => `<div class="tl-top"><div class="tl-title">${esc(T3_LABEL[view.id])}</div>
+      <div class="tl-meta"><span>${tl.paused ? "Pausado" : "Troca em " + tl.left + "s"}</span><span class="tl-clock">${hora}</span>
+      <button class="tl-x" type="button" data-tl="exit">Sair (Esc)</button></div></div>
+    <div class="tl-prog"><i style="width:${Math.min(100, d && d.result ? d.result.sectionsPct : 0)}%"></i></div>${sub}${body}<div class="tl-dots">${dots}</div>`;
+  if (!d || d.kind !== "ok") {
+    el.innerHTML = top("", `<div class="tl-sub">${!d ? "Carregando…" : d.kind === "wait" ? "Resultados ainda não publicados para este cargo." : "Falha na leitura. Tentando de novo…"}</div>`);
+    return;
+  }
+  const r = d.result, plan = t3Plan(r, view).filter(x => x.hi);
+  const sz = telaoSizes(plan.length);
+  const sub = `<div class="tl-sub"><span><b>${fmtPct(r.sectionsPct)}</b> das seções apuradas (${fmtInt(r.sectionsDone)} de ${fmtInt(r.sectionsTotal)})</span>
+      <span>${fmtInt(r.cands.length)} candidatos · ${r.seats} ${r.seats === 1 ? "vaga" : "vagas"}</span><span>Brancos ${fmtPct(r.blankPct)} · Nulos ${fmtPct(r.nullsPct)}</span></div>`;
+  const ban = runoffBanner(view, r).replace(/class="banner (ok|warn)"/, 'class="tl-ban $1"').replace(/<span>/, "<div>").replace(/<\/span>/, "</div>");
+  const cards = plan.length ? plan.map(x => {
+    const c = x.c, ini = String(c.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+    const img = c.sq ? `<img class="foto" alt="" src="${esc(photoUrl(view, c))}">` : "";
+    const tag = x.runoff ? (x.prov ? "Projeção 2º turno" : "2º turno") : (c.elected ? "Eleito" : "");
+    return `<div class="tl-c"><div class="tl-ph">${esc(ini)}${img}</div>
+      <div class="tl-t"><div class="tl-n">${x.rank}º ${esc(c.name)}</div><div class="tl-p">${esc(c.party)} · ${esc(c.number)}${tag ? " · " + esc(tag) : ""}</div>
+      <div class="tl-v">${fmtPct(c.pct)}<small>${fmtInt(c.votes)} votos</small></div></div></div>`;
+  }).join("") : '<div class="tl-sub">Nenhum voto apurado ainda.</div>';
+  el.innerHTML = top(sub, ban + `<div class="tl-grid" style="--cols:${sz.cols};--ph:${sz.ph};--fn:${sz.fn};--fs:${sz.fs};--fv:${sz.fv}">${cards}</div>`);
+}
+
+function telaoGo(i) {
+  tl.idx = (i + VIEWS.length) % VIEWS.length; tl.left = TELAO_SECONDS; telaoRender();
+}
+function telaoOpen() {
+  tl.open = true; tl.idx = 0; tl.left = TELAO_SECONDS; tl.paused = false;
+  $("telao").hidden = false;
+  try { document.documentElement.requestFullscreen().catch(() => {}); } catch (_) {}
+  telaoRender();
+  tl.timer = setInterval(() => {
+    if (!tl.paused && --tl.left <= 0) { telaoGo(tl.idx + 1); return; }
+    telaoRender();
+  }, 1000);
+}
+function telaoClose() {
+  tl.open = false; clearInterval(tl.timer); $("telao").hidden = true;
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {}
+}
+$("btnTelao").addEventListener("click", telaoOpen);
+$("telao").addEventListener("click", e => { if (e.target.closest("[data-tl=exit]")) telaoClose(); else tl.paused = !tl.paused; });
+document.addEventListener("keydown", e => {
+  if (!tl.open) return;
+  if (e.key === "Escape") telaoClose();
+  else if (e.key === "ArrowRight") telaoGo(tl.idx + 1);
+  else if (e.key === "ArrowLeft") telaoGo(tl.idx - 1);
+  else if (e.key === " ") { e.preventDefault(); tl.paused = !tl.paused; }
+});
+document.addEventListener("fullscreenchange", () => { if (tl.open && !document.fullscreenElement) telaoClose(); });
+
 /* ---------- Início ---------- */
 (function init() {
   const h = location.hash.replace("#", "");
@@ -613,6 +712,7 @@ document.addEventListener("error", e => {
   else if (VIEWS.some(v => v.id === h)) state.active = h;
   $("src").value = state.src;
   renderTabs(); render();
+  if (h === "telao") telaoOpen();
   refreshAll();
   setInterval(() => {
     if (state.busy) return;

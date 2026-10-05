@@ -157,6 +157,7 @@ footer a{color:var(--accent)}
 .tl-dots i.on{background:var(--accent)}
 #scopebar input{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
 #scopebar{margin-top:8px}
+#munMsg{font-size:13px;color:var(--bad)}
 .banner{border:1px solid var(--line,#444);border-radius:10px;padding:12px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:4px}
 .banner.ok{background:var(--ok-bg);color:var(--ok)}
 .banner.warn{background:var(--warn-bg);color:var(--warn)}
@@ -198,6 +199,7 @@ footer a{color:var(--accent)}
     <select id="lvl"><option value="br">Brasil (Presidente)</option><option value="uf">Estado</option><option value="mun">Município</option></select>
     <select id="ufSel" aria-label="Estado"></select>
     <select id="munSel" aria-label="Município" hidden></select>
+    <span id="munMsg" class="muted" hidden></span>
     <input id="munCode" aria-label="Código TSE do município" placeholder="Código TSE (5 dígitos)" inputmode="numeric" maxlength="5" size="14" hidden>
   </div>
 
@@ -689,14 +691,24 @@ function findMuns(node, uf) {
 }
 async function loadMuns(uf) {
   if (SC.muns[uf]) return SC.muns[uf];
-  const url = `${SOURCES[state.src].base}/comum/config/ele-c.json`, direct = directUrl(url);
-  let r = null;
-  try { if (direct) r = await fetch(direct, { cache: "no-store" }); } catch (_) {}
-  try { if (!r || !r.ok) r = await fetch(url, { cache: "no-store" }); } catch (_) {}
-  if (!r || !r.ok) { SC.munErr = "lista de municípios indisponível"; return null; }
-  const list = findMuns(await r.json(), uf);
-  if (!list) { SC.munErr = "municípios não encontrados no arquivo do TSE"; return null; }
-  SC.munErr = ""; SC.muns[uf] = list; return list;
+  const S = SOURCES[state.src], pad = n => String(n).padStart(6, "0");
+  // arquivos de configuração do TSE que listam os municípios (o formato "mun-e…-cm.json" é o usado em eleições anteriores)
+  const urls = [`${S.base}/${S.est}/config/mun-e${pad(S.est)}-cm.json`, `${S.base}/${S.fed}/config/mun-e${pad(S.fed)}-cm.json`, `${S.base}/comum/config/ele-c.json`];
+  const falhas = [];
+  for (const url of urls) {
+    for (const u of [directUrl(url), url]) {
+      if (!u) continue;
+      try {
+        const r = await fetch(u, { cache: "no-store" });
+        if (!r.ok) { falhas.push("HTTP " + r.status); continue; }
+        const list = findMuns(await r.json(), uf);
+        if (list) { SC.munErr = ""; SC.muns[uf] = list; return list; }
+        falhas.push("sem municípios de " + uf.toUpperCase()); break;
+      } catch (e) { falhas.push(String(e && e.message || e)); }
+    }
+  }
+  SC.munErr = "lista de municípios indisponível (" + [...new Set(falhas)].join("; ") + ")";
+  return null;
 }
 
 function applyScope(reload) {
@@ -709,6 +721,7 @@ function applyScope(reload) {
   if (muns) $("munSel").innerHTML = muns.map(m => `<option value="${m.cd}">${esc(m.nm)}</option>`).join("");
   if (muns && SC.mun) $("munSel").value = SC.mun;
   if (showMun && !muns) $("munCode").placeholder = SC.munErr ? "Código TSE (5 dígitos)" : "Carregando municípios…";
+  $("munMsg").hidden = !(showMun && !muns && SC.munErr); $("munMsg").textContent = SC.munErr;
   saveScope();
   if (reload) { state.data = {}; renderTabs(); render(); refreshAll(); }
 }
@@ -723,7 +736,10 @@ async function scopeInit() {
   applyScope(false);
   if (JSON.stringify(VIEWS.map(v => v.pfx)) !== before) { state.data = {}; renderTabs(); render(); refreshAll(); }
 }
-$("lvl").addEventListener("change", e => { SC.level = e.target.value; applyScope(true); });
+$("lvl").addEventListener("change", async e => {
+  SC.level = e.target.value; applyScope(true);
+  if (SC.level === "mun" && !SC.muns[SC.uf]) { await loadMuns(SC.uf); const l = SC.muns[SC.uf]; if (l && !SC.mun) { SC.mun = l[0].cd; SC.munNm = l[0].nm; applyScope(true); } else applyScope(false); }
+});
 $("ufSel").addEventListener("change", async e => {
   SC.uf = e.target.value; SC.mun = ""; SC.munNm = "";
   applyScope(false);

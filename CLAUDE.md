@@ -36,3 +36,8 @@ Painel de apuração (Brasil e Mato Grosso) com dados oficiais do TSE. Site est�
 - Lista de municípios lida de `comum/config/ele-c.json` por busca genérica (`findMuns`); se falhar, aparece campo para digitar o código TSE.
 - Eleição estadual assumida como 6259 para todas as UFs; DF usa cargo 8 (distrital). Pendente confirmar.
 - Visão municipal (`view.local`) não mostra "eleito" nem projeção de 2º turno: só os mais votados na cidade.
+
+## Mapa
+- Botão "Mapa" (`#mapa`): Brasil por estado (Presidente) e estado por município (qualquer cargo); entra no rodízio do telão (2 telas).
+- Geometrias em `public/geo/` (uf.json + mun-<uf>.json), geradas a partir de tbrugz/geodata-br e codeforamerica/click_that_hood, simplificadas (caminhos SVG prontos).
+- Município casado por NOME normalizado (lista do TSE × nome no mapa); IDs do TSE e do IBGE diferem. Não confirmado com dados reais.

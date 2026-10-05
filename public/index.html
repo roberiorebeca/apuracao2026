@@ -158,6 +158,27 @@ footer a{color:var(--accent)}
 #scopebar input{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
 #scopebar{margin-top:8px}
 #munMsg{font-size:13px;color:var(--bad)}
+
+.mapview[hidden]{display:none}
+.muted{color:var(--muted);font-size:13px}
+.map-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(240px,1fr);gap:16px;margin-top:12px;align-items:start}
+@media (max-width:760px){.map-body{grid-template-columns:1fr}}
+.map-box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:280px}
+.map-box svg{width:100%;height:auto;max-height:78vh;display:block}
+.map-box path{stroke:var(--surface);stroke-width:var(--sw,.6);vector-effect:non-scaling-stroke;cursor:pointer}
+.map-box path:hover,.map-box path.sel{stroke:var(--fg);stroke-width:2}
+.map-side{display:flex;flex-direction:column;gap:12px}
+.lg{display:flex;flex-direction:column;gap:6px}
+.lg-i{display:flex;align-items:center;gap:8px;font-size:14px}
+.lg-i i{flex:none;width:14px;height:14px;border-radius:3px}
+.lg-i b{margin-left:auto;font-variant-numeric:tabular-nums}
+.md{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.md h3{margin:0 0 4px;font-size:18px}
+.md table{width:100%;border-collapse:collapse}.md td{padding:3px 0}.md td.r{text-align:right;font-variant-numeric:tabular-nums}
+.tl-mapwrap{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:2vw}
+.tl-mapwrap .map-box{display:flex;align-items:center;min-height:0;height:100%}
+.tl-mapwrap svg{max-height:100%;height:100%}
+.tl-mapwrap .lg-i{font-size:clamp(14px,2.6vh,30px);gap:1vw}.tl-mapwrap .lg-i i{width:2.4vh;height:2.4vh}
 .banner{border:1px solid var(--line,#444);border-radius:10px;padding:12px 14px;margin:0 0 14px;display:flex;flex-direction:column;gap:4px}
 .banner.ok{background:var(--ok-bg);color:var(--ok)}
 .banner.warn{background:var(--warn-bg);color:var(--warn)}
@@ -190,6 +211,7 @@ footer a{color:var(--accent)}
     </select>
     <button id="refresh" type="button">Atualizar agora</button>
     <button id="btnTop3" type="button" aria-pressed="false">Painel Top 3</button>
+    <button id="btnMapa" type="button" aria-pressed="false">Mapa</button>
     <button id="btnTelao" type="button">Modo telão</button>
     <button id="btnFull" type="button">Tela cheia</button>
   </div>
@@ -208,6 +230,15 @@ footer a{color:var(--accent)}
   <main class="panel" id="panel"></main>
   <div class="tabs" role="tablist" id="t3tabs" hidden></div>
   <div class="t3-search" id="t3search" hidden><label for="q">Buscar candidato</label><input id="q" type="search" placeholder="Nome, partido ou número" autocomplete="off"></div>
+  <section class="mapview" id="mapview" hidden aria-label="Mapa de resultados">
+    <div class="status">
+      <label for="maplvl">Mapa</label>
+      <select id="maplvl"><option value="br">Brasil por estado (Presidente)</option><option value="uf">Estado por município</option></select>
+      <span id="mapinfo" class="muted"></span>
+    </div>
+    <div class="tabs" role="tablist" id="maptabs"></div>
+    <div class="map-body"><div class="map-box" id="mapbox"></div><aside class="map-side"><div id="maplegend"></div><div id="mapdetail"></div></aside></div>
+  </section>
   <section class="top3" id="top3" hidden aria-label="Três mais votados por cargo"></section>
 
   <footer>
@@ -620,11 +651,14 @@ function renderResumo() {
 }
 
 function render() {
-  const top = state.mode === "top3";
-  $("tabs").hidden = top; $("panel").hidden = top; $("top3").hidden = !top; $("t3tabs").hidden = !top; $("t3search").hidden = !top;
+  const top = state.mode === "top3", mapa = state.mode === "mapa", det = !top && !mapa;
+  $("tabs").hidden = !det; $("panel").hidden = !det; $("top3").hidden = !top; $("t3tabs").hidden = !top; $("t3search").hidden = !top;
+  $("mapview").hidden = !mapa;
   $("btnTop3").setAttribute("aria-pressed", String(top));
   $("btnTop3").textContent = top ? "Voltar ao detalhado" : "Painel Top 3";
-  if (top) renderTop3(); else renderPanel();
+  $("btnMapa").setAttribute("aria-pressed", String(mapa));
+  $("btnMapa").textContent = mapa ? "Voltar ao detalhado" : "Mapa";
+  if (top) renderTop3(); else if (mapa) mapShow(); else renderPanel();
   renderResumo();
   renderStatus();
   telaoRender();
@@ -649,7 +683,9 @@ $("btnTop3").addEventListener("click", () => {
 });
 $("resumo").addEventListener("click", e => {
   const b = e.target.closest("[data-rs]"); if (!b) return;
-  if (state.mode === "top3") state.t3 = b.dataset.rs; else state.active = b.dataset.rs; if (state.mode !== "top3") renderTabs();
+  if (state.mode === "top3") state.t3 = b.dataset.rs;
+  else if (state.mode === "mapa") { if (MAP.lvl === "uf" || b.dataset.rs === "pres") { MAP.cargo = b.dataset.rs; MAP.sel = null; } }
+  else { state.active = b.dataset.rs; renderTabs(); }
   render();
   try { history.replaceState(null, "", hashNow()); } catch (_) {}
 });
@@ -751,6 +787,147 @@ $("ufSel").addEventListener("change", async e => {
 $("munSel").addEventListener("change", e => { SC.mun = e.target.value; SC.munNm = (SC.muns[SC.uf].find(m => m.cd === SC.mun) || {}).nm || ""; applyScope(true); });
 $("munCode").addEventListener("change", e => { const v = e.target.value.replace(/\D/g, "").padStart(5, "0"); if (/^\d{5}$/.test(v)) { SC.mun = v; SC.munNm = ""; applyScope(true); } });
 
+/* ---------- Mapa de resultados ---------- */
+const MAP = { cargo: "pres", lvl: "br", cache: {}, geo: {}, sel: null, running: {} };
+const MAP_COLORS = ["#2f6fdb", "#e8590c", "#2f9e44", "#9c36b5", "#d6a100", "#0c8599", "#d6336c", "#7b5e3b"];
+const normNome = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/* spec: nível ("br" = estados, "uf" = municípios do estado escolhido) + cargo */
+function mapSpec(lvl, cargoId) {
+  const view = makeViews({ uf: SC.uf, level: "uf", mun: "", munNm: "" }).find(v => v.id === cargoId) || VIEWS[0];
+  if (lvl === "br") {
+    const v = { ...view, id: "pres", cargo: 1, elec: "fed" };
+    return { key: "br:1", lvl, geoFile: "uf", view: v, title: "Presidente · resultado por estado", unit: "estados" };
+  }
+  return { key: SC.uf + ":" + view.cargo, lvl, geoFile: "mun-" + SC.uf, view, title: `${view.short} · ${UFS[SC.uf]} por município`, unit: "municípios" };
+}
+async function mapGeo(file) {
+  if (MAP.geo[file]) return MAP.geo[file];
+  const r = await fetch(`geo/${file}.json`);
+  if (!r.ok) throw new Error("mapa " + file + ": HTTP " + r.status);
+  return (MAP.geo[file] = await r.json());
+}
+async function fetchJson(url) {
+  const direct = directUrl(url); let r = null;
+  if (direct) { try { r = await fetch(direct, { cache: "no-store" }); } catch (_) {} }
+  if (!r || r.status === 429 || r.status >= 500) r = await fetchTry(url);
+  if (!r.ok) return null;
+  return r.json();
+}
+/* Carrega (e atualiza a cada 2 min) os resultados de cada área do mapa, 8 pedidos por vez. */
+async function mapLoad(spec, force) {
+  const c = MAP.cache[spec.key];
+  if (MAP.running[spec.key] || (c && !force && Date.now() - c.t < 120000)) return;
+  MAP.running[spec.key] = true;
+  const cache = MAP.cache[spec.key] || (MAP.cache[spec.key] = { t: 0, areas: {}, total: 0, done: 0, miss: [] });
+  try {
+    const geo = await mapGeo(spec.geoFile);
+    let tasks = [];
+    if (spec.lvl === "br") tasks = geo.features.map(f => ({ id: f.id, uf: f.id, pfx: f.id }));
+    else {
+      const muns = await loadMuns(SC.uf);
+      if (!muns) { cache.err = SC.munErr || "lista de municípios indisponível"; return; }
+      const byName = new Map(muns.map(m => [normNome(m.nm), m.cd]));
+      cache.miss = [];
+      for (const f of geo.features) {
+        const cd = byName.get(normNome(f.name));
+        if (cd) tasks.push({ id: f.id, uf: SC.uf, pfx: SC.uf + cd }); else cache.miss.push(f.name);
+      }
+    }
+    cache.err = ""; cache.total = tasks.length; cache.done = 0;
+    let i = 0, since = 0;
+    const worker = async () => {
+      while (i < tasks.length) {
+        const t = tasks[i++];
+        const v = { ...spec.view, dir: t.uf, pfx: t.pfx };
+        try {
+          const json = await fetchJson(buildUrl(state.src, v));
+          if (json) {
+            const r = parseResult(json, v);
+            cache.areas[t.id] = { top: r.cands.filter(x => x.votes > 0).slice(0, 5), pct: r.sectionsPct, valid: r.valid };
+          }
+        } catch (_) {}
+        cache.done++;
+        if (++since >= 15) { since = 0; mapDraw(); }
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, worker));
+    cache.t = Date.now();
+  } catch (e) { cache.err = String(e && e.message || e); }
+  finally { MAP.running[spec.key] = false; mapDraw(); }
+}
+
+const mapKey = c => c ? (c.name + "|" + c.party) : "";
+/* Cores: os candidatos mais bem colocados no total ganham cor; o resto fica cinza. */
+function mapColors(cache) {
+  const tot = new Map();
+  for (const a of Object.values(cache.areas)) for (const c of a.top.slice(0, 1)) {
+    const k = mapKey(c), o = tot.get(k) || { c, areas: 0, votes: 0 };
+    o.areas++; tot.set(k, o);
+  }
+  const sorted = [...tot.values()].sort((a, b) => b.areas - a.areas);
+  const color = new Map(); sorted.forEach((o, i) => color.set(mapKey(o.c), i < MAP_COLORS.length ? MAP_COLORS[i] : "#8a948f"));
+  return { sorted, color };
+}
+
+function mapHtml(spec, opts = {}) {
+  const geo = MAP.geo[spec.geoFile], cache = MAP.cache[spec.key];
+  if (!geo) return { svg: '<div class="msg">Carregando mapa…</div>', legend: "" };
+  const cs = cache ? mapColors(cache) : { sorted: [], color: new Map() };
+  const [x, y, w, h] = geo.view, pad = Math.round(w * 0.01);
+  const paths = geo.features.map(f => {
+    const a = cache && cache.areas[f.id], lead = a && a.top[0];
+    const fill = lead ? cs.color.get(mapKey(lead)) : "var(--bar-track)";
+    const op = lead ? Math.min(1, 0.55 + Math.max(0, lead.pct) / 100 * 0.9) : 1;
+    return `<path d="${f.d}" data-a="${esc(f.id)}" fill="${fill}" fill-opacity="${op.toFixed(2)}" class="${MAP.sel === f.id && !opts.noSel ? "sel" : ""}"><title>${esc(f.name)}${lead ? " — " + esc(lead.name) + " " + fmtPct(lead.pct) : ""}</title></path>`;
+  }).join("");
+  const svg = `<svg viewBox="${x - pad} ${y - pad} ${w + 2 * pad} ${h + 2 * pad}" role="img" aria-label="${esc(spec.title)}">${paths}</svg>`;
+  const rest = cs.sorted.length > MAP_COLORS.length ? cs.sorted.slice(MAP_COLORS.length).reduce((n, o) => n + o.areas, 0) : 0;
+  const legend = `<div class="lg">${cs.sorted.slice(0, MAP_COLORS.length).map(o =>
+      `<div class="lg-i"><i style="background:${cs.color.get(mapKey(o.c))}"></i><span>${esc(o.c.name)} <span class="muted">${esc(o.c.party)}</span></span><b>${o.areas}</b></div>`).join("")}
+    ${rest ? `<div class="lg-i"><i style="background:#8a948f"></i><span>Outros</span><b>${rest}</b></div>` : ""}
+    <div class="muted">${cache ? `Número = ${spec.unit} em que lidera.` : ""}</div></div>`;
+  return { svg, legend };
+}
+
+function mapDetail(spec) {
+  const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
+  if (!MAP.sel || !geo) return '<p class="muted">Clique em uma área do mapa para ver os números.</p>';
+  const f = geo.features.find(x => x.id === MAP.sel), a = cache && cache.areas[MAP.sel];
+  if (!f) return "";
+  if (!a) return `<div class="md"><h3>${esc(f.name)}</h3><span class="muted">Sem resultado publicado para esta área.</span></div>`;
+  return `<div class="md"><h3>${esc(f.name)}</h3><div class="muted">${fmtPct(a.pct)} das seções apuradas</div><table>${
+    a.top.map(c => `<tr><td>${esc(c.name)} <span class="muted">${esc(c.party)}</span></td><td class="r">${fmtPct(c.pct)}</td><td class="r muted">${fmtInt(c.votes)}</td></tr>`).join("")}</table></div>`;
+}
+
+function mapDraw() {
+  if (state.mode !== "mapa") return;
+  const spec = mapSpec(MAP.lvl, MAP.cargo), cache = MAP.cache[spec.key];
+  const { svg, legend } = mapHtml(spec);
+  $("mapbox").innerHTML = svg; $("maplegend").innerHTML = legend; $("mapdetail").innerHTML = mapDetail(spec);
+  const prog = cache && cache.total && cache.done < cache.total ? `Carregando ${cache.done}/${cache.total}…` : "";
+  const miss = cache && cache.miss && cache.miss.length ? `${cache.miss.length} município(s) sem correspondência de nome` : "";
+  $("mapinfo").textContent = (cache && cache.err) ? cache.err : [prog, miss].filter(Boolean).join(" · ");
+}
+async function mapShow(force) {
+  if (state.mode !== "mapa") return;
+  // Brasil por estado só existe para Presidente
+  if (MAP.lvl === "br") MAP.cargo = "pres";
+  $("maplvl").value = MAP.lvl;
+  $("maptabs").innerHTML = VIEWS.filter(v => MAP.lvl === "uf" || v.id === "pres").map(v =>
+    `<button class="tab" role="tab" data-mp="${v.id}" aria-selected="${v.id === MAP.cargo}">${esc(v.short)}</button>`).join("");
+  const spec = mapSpec(MAP.lvl, MAP.cargo);
+  try { await mapGeo(spec.geoFile); } catch (e) { $("mapinfo").textContent = String(e.message || e); return; }
+  mapDraw(); await mapLoad(spec, force); mapDraw();
+}
+$("maplvl").addEventListener("change", e => { MAP.lvl = e.target.value; MAP.sel = null; mapShow(); });
+$("maptabs").addEventListener("click", e => { const b = e.target.closest("[data-mp]"); if (!b) return; MAP.cargo = b.dataset.mp; MAP.sel = null; mapShow(); });
+$("mapbox").addEventListener("click", e => { const p = e.target.closest("path[data-a]"); if (!p) return; MAP.sel = p.dataset.a; mapDraw(); });
+$("btnMapa").addEventListener("click", () => {
+  state.mode = state.mode === "mapa" ? "detalhe" : "mapa"; render();
+  try { history.replaceState(null, "", state.mode === "mapa" ? "#mapa" : hashNow()); } catch (_) {}
+});
+
 /* ---------- Modo telão: tela cheia, sem menus, troca de cargo sozinha ---------- */
 const TELAO_SECONDS = 15;
 const tl = { open: false, idx: 0, left: TELAO_SECONDS, paused: false, timer: null };
@@ -763,11 +940,35 @@ function telaoSizes(n) {
   return { cols: 4, ph: "7vh", fn: "2.4vh", fs: "1.5vh", fv: "2.5vh" };
 }
 
+const telaoScreens = () => [...VIEWS.map(v => v.id), "map-br", "map-uf"];
+
+/* Tela de mapa do telão: só redesenha o mapa quando os dados mudam; o relógio atualiza todo segundo. */
+function telaoMapRender(sid) {
+  const el = $("telao"), spec = sid === "map-br" ? mapSpec("br", "pres") : mapSpec("uf", "gov");
+  const cache = MAP.cache[spec.key];
+  const sig = sid + "|" + SC.uf + "|" + (MAP.geo[spec.geoFile] ? 1 : 0) + "|" + (cache ? cache.done + "/" + cache.t : "-");
+  const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const meta = `<span>${tl.paused ? "Pausado" : "Troca em " + tl.left + "s"}</span><span class="tl-clock">${hora}</span><button class="tl-x" type="button" data-tl="exit">Sair (Esc)</button>`;
+  if (tl.sig === sig) { const m = $("tlmeta"); if (m) m.innerHTML = meta; return; }
+  tl.sig = sig;
+  if (!MAP.geo[spec.geoFile]) mapGeo(spec.geoFile).then(() => telaoRender()).catch(() => {});
+  mapLoad(spec).then(() => telaoRender());
+  const { svg, legend } = mapHtml(spec, { noSel: true });
+  const dots = telaoScreens().map((_, i) => `<i class="${i === tl.idx ? "on" : ""}"></i>`).join("");
+  const prog = cache && cache.total && cache.done < cache.total ? ` · carregando ${cache.done}/${cache.total}` : "";
+  el.innerHTML = `<div class="tl-top"><div class="tl-title">${esc(spec.title)}</div><div class="tl-meta" id="tlmeta">${meta}</div></div>
+    <div class="tl-sub"><span class="muted">${esc(cache && cache.err ? cache.err : "Cor = candidato mais votado" + prog)}</span></div>
+    <div class="tl-mapwrap"><div class="map-box">${svg}</div><div>${legend}</div></div><div class="tl-dots">${dots}</div>`;
+}
+
 function telaoRender() {
   if (!tl.open) return;
+  const sid = telaoScreens()[tl.idx];
+  if (sid.startsWith("map-")) return telaoMapRender(sid);
+  tl.sig = "";
   const view = VIEWS[tl.idx], d = state.data[view.id], el = $("telao");
   const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const dots = VIEWS.map((_, i) => `<i class="${i === tl.idx ? "on" : ""}"></i>`).join("");
+  const dots = telaoScreens().map((_, i) => `<i class="${i === tl.idx ? "on" : ""}"></i>`).join("");
   const top = (sub, body) => `<div class="tl-top"><div class="tl-title">${esc(T3_LABEL[view.id])}</div>
       <div class="tl-meta"><span>${tl.paused ? "Pausado" : "Troca em " + tl.left + "s"}</span><span class="tl-clock">${hora}</span>
       <button class="tl-x" type="button" data-tl="exit">Sair (Esc)</button></div></div>
@@ -793,7 +994,7 @@ function telaoRender() {
 }
 
 function telaoGo(i) {
-  tl.idx = (i + VIEWS.length) % VIEWS.length; tl.left = TELAO_SECONDS; telaoRender();
+  tl.idx = (i + telaoScreens().length) % telaoScreens().length; tl.sig = ""; tl.left = TELAO_SECONDS; telaoRender();
 }
 function telaoOpen() {
   tl.open = true; tl.idx = 0; tl.left = TELAO_SECONDS; tl.paused = false;
@@ -823,7 +1024,8 @@ document.addEventListener("fullscreenchange", () => { if (tl.open && !document.f
 /* ---------- Início ---------- */
 (function init() {
   const h = location.hash.replace("#", "");
-  if (h.startsWith("top3")) { state.mode = "top3"; const k = h.split("-")[1]; if (VIEWS.some(v => v.id === k)) state.t3 = k; }
+  if (h === "mapa") state.mode = "mapa";
+  else if (h.startsWith("top3")) { state.mode = "top3"; const k = h.split("-")[1]; if (VIEWS.some(v => v.id === k)) state.t3 = k; }
   else if (VIEWS.some(v => v.id === h)) state.active = h;
   $("src").value = state.src;
   scopeInit();

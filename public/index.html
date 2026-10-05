@@ -179,6 +179,11 @@ footer a{color:var(--accent)}
 .map-box path{stroke:var(--surface);stroke-width:var(--sw,.6);vector-effect:non-scaling-stroke;cursor:pointer}
 .map-box path:hover,.map-box path.sel{stroke:var(--fg);stroke-width:2}
 .map-side{display:flex;flex-direction:column;gap:12px}
+.ext{display:inline-flex;align-items:center;gap:8px;margin:8px 4px 2px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:14px;line-height:1.25}
+.ext i{width:16px;height:16px;border-radius:3px;flex:none}
+.ext.sel,.ext:hover{border-color:var(--fg)}
+.tl-mapwrap .ext{font-size:clamp(14px,2.6vh,30px);position:absolute;left:1.5vw;bottom:1.5vh;background:var(--surface)}
+.tl-mapwrap .map-box{position:relative}
 .lg{display:flex;flex-direction:column;gap:6px}
 .lg-i{display:flex;align-items:center;gap:8px;font-size:14px}
 .lg-i i{flex:none;width:14px;height:14px;border-radius:3px}
@@ -896,18 +901,24 @@ function mapHtml(spec, opts = {}) {
     return `<path d="${f.d}" data-a="${esc(f.id)}" fill="${fill}" fill-opacity="${op.toFixed(2)}" class="${MAP.sel === f.id && !opts.noSel ? "sel" : ""}"><title>${esc(f.name)}${lead ? " — " + esc(lead.name) + " " + fmtPct(lead.pct) : ""}</title></path>`;
   }).join("");
   const svg = `<svg viewBox="${x - pad} ${y - pad} ${w + 2 * pad} ${h + 2 * pad}" role="img" aria-label="${esc(spec.title)}">${paths}</svg>`;
+  let ext = "";
+  if (spec.lvl === "br") {   // votos no exterior não têm lugar no mapa: viram um quadro à parte
+    const a = cache && cache.areas.zz, lead = a && a.top[0];
+    const cor = lead ? cs.color.get(mapKey(lead)) : null;
+    ext = `<div class="ext${MAP.sel === "zz" && !opts.noSel ? " sel" : ""}" data-a="zz" role="button" tabindex="0"><i style="background:${cor || "var(--bar-track)"}"></i><span><b>Exterior</b><br>${lead ? esc(lead.name) + " · " + fmtPct(lead.pct) : "sem resultado"}</span></div>`;
+  }
   const rest = cs.sorted.length > MAP_COLORS.length ? cs.sorted.slice(MAP_COLORS.length).reduce((n, o) => n + o.areas, 0) : 0;
   const legend = `<div class="lg">${cs.sorted.slice(0, MAP_COLORS.length).map(o =>
       `<div class="lg-i"><i style="background:${cs.color.get(mapKey(o.c))}"></i><span>${esc(o.c.name)} <span class="muted">${esc(o.c.party)}</span></span><b>${o.areas}</b></div>`).join("")}
     ${rest ? `<div class="lg-i"><i style="background:#8a948f"></i><span>Outros</span><b>${rest}</b></div>` : ""}
     <div class="muted">${cache ? `Número = ${spec.unit} em que lidera.` : ""}</div></div>`;
-  return { svg, legend };
+  return { svg: svg + ext, legend };
 }
 
 function mapDetail(spec) {
   const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
   if (!MAP.sel || !geo) return '<p class="muted">Clique em uma área do mapa para ver os números.</p>';
-  const f = geo.features.find(x => x.id === MAP.sel), a = cache && cache.areas[MAP.sel];
+  const f = mapAreas(spec, geo).find(x => x.id === MAP.sel), a = cache && cache.areas[MAP.sel];
   if (!f) return "";
   if (!a) return `<div class="md"><h3>${esc(f.name)}</h3><span class="muted">Sem resultado publicado para esta área.</span></div>`;
   return `<div class="md"><h3>${esc(f.name)}</h3><div class="muted">${fmtPct(a.pct)} das seções apuradas</div><table>${
@@ -1007,7 +1018,7 @@ $("mapbox").addEventListener("click", e => {
 });
 $("maplvl").addEventListener("change", e => { MAP.lvl = e.target.value; MAP.sel = null; mapShow(); });
 $("maptabs").addEventListener("click", e => { const b = e.target.closest("[data-mp]"); if (!b) return; MAP.cargo = b.dataset.mp; MAP.sel = null; mapShow(); });
-$("mapbox").addEventListener("click", e => { const p = e.target.closest("path[data-a]"); if (!p) return; MAP.sel = p.dataset.a; mapDraw(); });
+$("mapbox").addEventListener("click", e => { const p = e.target.closest("[data-a]"); if (!p) return; MAP.sel = p.dataset.a; mapDraw(); });
 $("btnMapa").addEventListener("click", () => {
   state.mode = state.mode === "mapa" ? "detalhe" : "mapa"; render();
   try { history.replaceState(null, "", state.mode === "mapa" ? "#mapa" : hashNow()); } catch (_) {}

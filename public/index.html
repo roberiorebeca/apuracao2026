@@ -836,7 +836,7 @@ async function mapLoad(spec, force) {
   try {
     const geo = await mapGeo(spec.geoFile);
     let tasks = [];
-    if (spec.lvl === "br") tasks = geo.features.map(f => ({ id: f.id, uf: f.id, pfx: f.id }));
+    if (spec.lvl === "br") tasks = [...geo.features.map(f => ({ id: f.id, uf: f.id, pfx: f.id })), { id: "zz", uf: "zz", pfx: "zz" }];   // zz = votos no exterior (não aparecem em nenhum estado)
     else {
       const muns = await loadMuns(SC.uf);
       if (!muns) { cache.err = SC.munErr || "lista de municípios indisponível"; return; }
@@ -875,7 +875,7 @@ const mapKey = c => c ? (c.name + "|" + c.party) : "";
 /* Cores: os candidatos mais bem colocados no total ganham cor; o resto fica cinza. */
 function mapColors(cache) {
   const tot = new Map();
-  for (const a of Object.values(cache.areas)) for (const c of a.top.slice(0, 1)) {
+  for (const [id, a] of Object.entries(cache.areas)) if (id !== "zz") for (const c of a.top.slice(0, 1)) {
     const k = mapKey(c), o = tot.get(k) || { c, areas: 0, votes: 0 };
     o.areas++; tot.set(k, o);
   }
@@ -914,11 +914,14 @@ function mapDetail(spec) {
     a.top.map(c => `<tr><td>${esc(c.name)} <span class="muted">${esc(c.party)}</span></td><td class="r">${fmtPct(c.pct)}</td><td class="r muted">${fmtInt(c.votes)}</td></tr>`).join("")}</table></div>`;
 }
 
+/* Áreas da tabela: as do mapa + "Exterior" no nível Brasil (Presidente tem votos fora do país). */
+const mapAreas = (spec, geo) => spec.lvl === "br" ? [...geo.features, { id: "zz", name: "Exterior" }] : geo.features;
+
 /* Tabela de votos por área (estado ou município): uma coluna por candidato, líder da linha em destaque. */
 function mapTable(spec) {
   const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
   if (!cache || !geo) return '<div class="msg">Carregando…</div>';
-  const rows = geo.features.filter(f => cache.areas[f.id]).map(f => ({ f, a: cache.areas[f.id] }));
+  const rows = mapAreas(spec, geo).filter(f => cache.areas[f.id]).map(f => ({ f, a: cache.areas[f.id] }));
   if (!rows.length) return '<div class="msg">Sem resultados publicados ainda.</div>';
   const tot = new Map();
   rows.forEach(({ a }) => a.all.forEach(c => { const k = mapKey(c), o = tot.get(k) || { c, votes: 0 }; o.votes += c.votes; tot.set(k, o); }));
@@ -947,12 +950,13 @@ function mapTable(spec) {
   const rest = sorted.slice(cols.length).reduce((n, o) => n + o.votes, 0);
   const foot = `<tr><td>${spec.lvl === "br" ? "Brasil" : "Total"}</td><td></td>${cols.map(o => `<td>${cell(o.votes, grand)}</td>`).join("")}${hasRest ? `<td>${cell(rest, grand)}</td>` : ""}<td>${fmtInt(grand)}</td></tr>`;
   const falta = cache.total && rows.length < cache.total ? `<p class="muted">${rows.length} de ${cache.total} ${spec.unit} com resultado.</p>` : "";
-  return `<div class="vt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>${falta}`;
+  const nota = spec.lvl === "br" ? '<p class="muted">Inclui a linha “Exterior” (votos de brasileiros no exterior), que não pertence a nenhum estado. Cada linha é lida em momentos ligeiramente diferentes, então a soma pode divergir um pouco do total oficial enquanto a apuração corre.</p>' : "";
+  return `<div class="vt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>${falta}${nota}`;
 }
 function mapCsv(spec) {
   const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
   if (!cache || !geo) return;
-  const rows = geo.features.filter(f => cache.areas[f.id]);
+  const rows = mapAreas(spec, geo).filter(f => cache.areas[f.id]);
   const tot = new Map();
   rows.forEach(f => cache.areas[f.id].all.forEach(c => { const k = mapKey(c), o = tot.get(k) || { c, votes: 0 }; o.votes += c.votes; tot.set(k, o); }));
   const cols = [...tot.values()].sort((x, y) => y.votes - x.votes);

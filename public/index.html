@@ -159,6 +159,17 @@ footer a{color:var(--accent)}
 #scopebar{margin-top:8px}
 #munMsg{font-size:13px;color:var(--bad)}
 
+
+.map-body.tbl{display:block}.map-body.tbl .map-side{display:none}
+.vt{overflow:auto;max-height:75vh;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.vt table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+.vt th,.vt td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.vt th{position:sticky;top:0;background:var(--surface);cursor:pointer;z-index:2;font-size:13px}
+.vt th:first-child,.vt td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1}
+.vt th:first-child{z-index:3}
+.vt td small{display:block;color:var(--muted);font-size:12px}
+.vt td.lead{background:var(--ok-bg);font-weight:700}
+.vt tfoot td{font-weight:700;border-top:2px solid var(--line)}
 .mapview[hidden]{display:none}
 .muted{color:var(--muted);font-size:13px}
 .map-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(240px,1fr);gap:16px;margin-top:12px;align-items:start}
@@ -234,6 +245,8 @@ footer a{color:var(--accent)}
     <div class="status">
       <label for="maplvl">Mapa</label>
       <select id="maplvl"><option value="br">Brasil por estado (Presidente)</option><option value="uf">Estado por município</option></select>
+      <select id="mapfmt" aria-label="Formato"><option value="mapa">Mapa</option><option value="tabela">Tabela de votos</option></select>
+      <button id="mapcsv" type="button" hidden>Baixar CSV</button>
       <span id="mapinfo" class="muted"></span>
     </div>
     <div class="tabs" role="tablist" id="maptabs"></div>
@@ -844,7 +857,8 @@ async function mapLoad(spec, force) {
           const json = await fetchJson(buildUrl(state.src, v));
           if (json) {
             const r = parseResult(json, v);
-            cache.areas[t.id] = { top: r.cands.filter(x => x.votes > 0).slice(0, 5), pct: r.sectionsPct, valid: r.valid };
+            const lista = r.cands.filter(x => x.votes > 0);
+            cache.areas[t.id] = { top: lista.slice(0, 5), all: lista.map(x => ({ name: x.name, party: x.party, number: x.number, votes: x.votes })), pct: r.sectionsPct, valid: r.valid };
           }
         } catch (_) {}
         cache.done++;
@@ -900,11 +914,70 @@ function mapDetail(spec) {
     a.top.map(c => `<tr><td>${esc(c.name)} <span class="muted">${esc(c.party)}</span></td><td class="r">${fmtPct(c.pct)}</td><td class="r muted">${fmtInt(c.votes)}</td></tr>`).join("")}</table></div>`;
 }
 
+/* Tabela de votos por área (estado ou município): uma coluna por candidato, líder da linha em destaque. */
+function mapTable(spec) {
+  const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
+  if (!cache || !geo) return '<div class="msg">Carregando…</div>';
+  const rows = geo.features.filter(f => cache.areas[f.id]).map(f => ({ f, a: cache.areas[f.id] }));
+  if (!rows.length) return '<div class="msg">Sem resultados publicados ainda.</div>';
+  const tot = new Map();
+  rows.forEach(({ a }) => a.all.forEach(c => { const k = mapKey(c), o = tot.get(k) || { c, votes: 0 }; o.votes += c.votes; tot.set(k, o); }));
+  const sorted = [...tot.values()].sort((x, y) => y.votes - x.votes);
+  const cols = sorted.slice(0, 12), colKeys = new Set(cols.map(o => mapKey(o.c)));
+  const hasRest = sorted.length > cols.length;
+  const sum = a => a.all.reduce((n, c) => n + c.votes, 0);
+  const vals = rows.map(({ f, a }) => {
+    const v = new Map(); let rest = 0;
+    a.all.forEach(c => { const k = mapKey(c); if (colKeys.has(k)) v.set(k, c.votes); else rest += c.votes; });
+    return { f, a, v, rest, total: sum(a) };
+  });
+  const key = MAP.sort || "name", dir = MAP.sortDir || 1;
+  vals.sort((x, y) => key === "name" ? dir * x.f.name.localeCompare(y.f.name, "pt-BR")
+    : key === "total" ? dir * (y.total - x.total)
+    : key === "pct" ? dir * (y.a.pct - x.a.pct)
+    : dir * ((y.v.get(key) || 0) - (x.v.get(key) || 0)));
+  const grand = vals.reduce((n, r) => n + r.total, 0);
+  const cell = (v, t) => `${fmtInt(v)}<small>${t ? fmtPct(v / t * 100) : "—"}</small>`;
+  const th = (k, txt) => `<th data-sort="${esc(k)}" title="Ordenar">${txt}${key === k ? (dir === 1 ? " ▲" : " ▼") : ""}</th>`;
+  const head = `<tr>${th("name", spec.lvl === "br" ? "Estado" : "Município")}${th("pct", "Seções")}${cols.map(o => th(mapKey(o.c), `${esc(o.c.name)}<br><span class="muted">${esc(o.c.party)}</span>`)).join("")}${hasRest ? "<th>Outros</th>" : ""}${th("total", "Total")}</tr>`;
+  const body = vals.map(r => {
+    const lead = r.a.top[0] ? mapKey(r.a.top[0]) : "";
+    return `<tr><td>${esc(r.f.name)}</td><td>${fmtPct(r.a.pct)}</td>${cols.map(o => { const k = mapKey(o.c); return `<td class="${k === lead ? "lead" : ""}">${cell(r.v.get(k) || 0, r.total)}</td>`; }).join("")}${hasRest ? `<td>${cell(r.rest, r.total)}</td>` : ""}<td>${fmtInt(r.total)}</td></tr>`;
+  }).join("");
+  const rest = sorted.slice(cols.length).reduce((n, o) => n + o.votes, 0);
+  const foot = `<tr><td>${spec.lvl === "br" ? "Brasil" : "Total"}</td><td></td>${cols.map(o => `<td>${cell(o.votes, grand)}</td>`).join("")}${hasRest ? `<td>${cell(rest, grand)}</td>` : ""}<td>${fmtInt(grand)}</td></tr>`;
+  const falta = cache.total && rows.length < cache.total ? `<p class="muted">${rows.length} de ${cache.total} ${spec.unit} com resultado.</p>` : "";
+  return `<div class="vt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>${falta}`;
+}
+function mapCsv(spec) {
+  const cache = MAP.cache[spec.key], geo = MAP.geo[spec.geoFile];
+  if (!cache || !geo) return;
+  const rows = geo.features.filter(f => cache.areas[f.id]);
+  const tot = new Map();
+  rows.forEach(f => cache.areas[f.id].all.forEach(c => { const k = mapKey(c), o = tot.get(k) || { c, votes: 0 }; o.votes += c.votes; tot.set(k, o); }));
+  const cols = [...tot.values()].sort((x, y) => y.votes - x.votes);
+  const q = t => '"' + String(t).replace(/"/g, '""') + '"';
+  const lines = [[spec.lvl === "br" ? "Estado" : "Município", "Seções apuradas (%)", ...cols.map(o => `${o.c.name} (${o.c.party})`), "Total"].map(q).join(";")];
+  rows.forEach(f => {
+    const a = cache.areas[f.id], m = new Map(a.all.map(c => [mapKey(c), c.votes]));
+    lines.push([q(f.name), String(a.pct).replace(".", ","), ...cols.map(o => m.get(mapKey(o.c)) || 0), a.all.reduce((n, c) => n + c.votes, 0)].join(";"));
+  });
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `votos-${spec.key.replace(":", "-")}.csv`; document.body.appendChild(a); a.click(); a.remove();
+}
+
 function mapDraw() {
   if (state.mode !== "mapa") return;
   const spec = mapSpec(MAP.lvl, MAP.cargo), cache = MAP.cache[spec.key];
-  const { svg, legend } = mapHtml(spec);
-  $("mapbox").innerHTML = svg; $("maplegend").innerHTML = legend; $("mapdetail").innerHTML = mapDetail(spec);
+  const tabela = MAP.fmt === "tabela";
+  document.querySelector(".map-body").classList.toggle("tbl", tabela);
+  $("mapcsv").hidden = !tabela; $("mapfmt").value = MAP.fmt || "mapa";
+  if (tabela) { $("mapbox").innerHTML = mapTable(spec); }
+  else {
+    const { svg, legend } = mapHtml(spec);
+    $("mapbox").innerHTML = svg; $("maplegend").innerHTML = legend; $("mapdetail").innerHTML = mapDetail(spec);
+  }
   const prog = cache && cache.total && cache.done < cache.total ? `Carregando ${cache.done}/${cache.total}…` : "";
   const miss = cache && cache.miss && cache.miss.length ? `${cache.miss.length} município(s) sem correspondência de nome` : "";
   $("mapinfo").textContent = (cache && cache.err) ? cache.err : [prog, miss].filter(Boolean).join(" · ");
@@ -920,6 +993,14 @@ async function mapShow(force) {
   try { await mapGeo(spec.geoFile); } catch (e) { $("mapinfo").textContent = String(e.message || e); return; }
   mapDraw(); await mapLoad(spec, force); mapDraw();
 }
+$("mapfmt").addEventListener("change", e => { MAP.fmt = e.target.value; mapDraw(); });
+$("mapcsv").addEventListener("click", () => mapCsv(mapSpec(MAP.lvl, MAP.cargo)));
+$("mapbox").addEventListener("click", e => {
+  const h = e.target.closest("th[data-sort]"); if (!h) return;
+  const k = h.dataset.sort;
+  if (MAP.sort === k) MAP.sortDir = -(MAP.sortDir || 1); else { MAP.sort = k; MAP.sortDir = 1; }
+  mapDraw();
+});
 $("maplvl").addEventListener("change", e => { MAP.lvl = e.target.value; MAP.sel = null; mapShow(); });
 $("maptabs").addEventListener("click", e => { const b = e.target.closest("[data-mp]"); if (!b) return; MAP.cargo = b.dataset.mp; MAP.sel = null; mapShow(); });
 $("mapbox").addEventListener("click", e => { const p = e.target.closest("path[data-a]"); if (!p) return; MAP.sel = p.dataset.a; mapDraw(); });

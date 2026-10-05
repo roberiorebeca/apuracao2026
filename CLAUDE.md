@@ -30,3 +30,9 @@ Painel de apuração (Brasil e Mato Grosso) com dados oficiais do TSE. Site est�
 ## Pendências
 - Segundo turno (25/10/2026): trocar os códigos de eleição e conferir o formato dos arquivos.
 - Confirmar o caminho das fotos e a contagem de candidatos com os dados reais.
+
+## Abrangência (Brasil / Estado / Município)
+- `makeViews(SC)` monta os 5 cargos; arquivo municipal assumido como `dados/<uf>/<uf><cod5>-c<cargo>-e<eleição>-u.json` (NÃO CONFIRMADO com dados reais).
+- Lista de municípios lida de `comum/config/ele-c.json` por busca genérica (`findMuns`); se falhar, aparece campo para digitar o código TSE.
+- Eleição estadual assumida como 6259 para todas as UFs; DF usa cargo 8 (distrital). Pendente confirmar.
+- Visão municipal (`view.local`) não mostra "eleito" nem projeção de 2º turno: só os mais votados na cidade.

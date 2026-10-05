@@ -10,11 +10,17 @@ new Function(m[1]); // erro de sintaxe falha aqui (não executa o código)
 
 // Executa só a parte pura (parser e montagem de URL)
 const head = m[1].split("/* ---------- Estado e rede")[0];
-const { parseResult, buildUrl, VIEWS } = new Function(head + "\nreturn { parseResult, buildUrl, VIEWS };")();
+const { parseResult, buildUrl, VIEWS, makeViews } = new Function(head + "\nreturn { parseResult, buildUrl, VIEWS, makeViews };")();
 
 assert.equal(VIEWS.length, 5, "esperado: presidente, governador, senador, dep. federal, dep. estadual");
 assert.match(buildUrl("oficial", VIEWS.find(v => v.id === "dest")), /\/6259\/dados\/mt\/mt-c0007-e006259-u\.json$/);
-assert.match(buildUrl("oficial", VIEWS.find(v => v.id === "pres")), /\/6257\/dados\/br\/br-c0001-e006257-u\.json$/);
+const br = makeViews({ uf: "mt", level: "br", mun: "", munNm: "" });
+assert.match(buildUrl("oficial", br[0]), /\/6257\/dados\/br\/br-c0001-e006257-u\.json$/);
+assert.match(buildUrl("oficial", br[1]), /\/6259\/dados\/mt\/mt-c0003-e006259-u\.json$/, "no nível Brasil, os demais cargos usam o estado");
+const mun = makeViews({ uf: "mt", level: "mun", mun: "90859", munNm: "X" });
+assert.match(buildUrl("oficial", mun[4]), /\/6259\/dados\/mt\/mt90859-c0007-e006259-u\.json$/);
+assert(mun.every(v => v.local), "visão de município deve ser marcada como local");
+assert.equal(makeViews({ uf: "df", level: "uf", mun: "", munNm: "" })[4].cargo, 8, "DF usa deputado distrital (cargo 8)");
 
 const amostra = {
   and: "p", dt: "04/10/2026", ht: "17:29:10",

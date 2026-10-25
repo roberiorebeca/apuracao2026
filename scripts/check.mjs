@@ -34,6 +34,11 @@ assert.equal(r.cands[0].name, "A");
 assert.equal(r.cands[0].votes, 700);
 assert.equal(r.sectionsPct, 50);
 
+const t2 = makeViews({ uf: "mt", level: "uf", mun: "", munNm: "", turno: 2 });
+assert.deepEqual(t2.map(v => v.id), ["pres", "gov"], "2º turno: só Presidente e Governador");
+assert.match(buildUrl("oficial", t2[0]), /\/6258\/dados\/mt\/mt-c0001-e006258-u\.json$/);
+assert.match(buildUrl("oficial", t2[1]), /\/6260\/dados\/mt\/mt-c0003-e006260-u\.json$/);
+
 const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 assert(vercel.rewrites.some(x => x.source.startsWith("/tse/")), "falta o repasse /tse/ no vercel.json");
 

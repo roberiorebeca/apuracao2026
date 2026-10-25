@@ -233,6 +233,8 @@ footer a{color:var(--accent)}
   </div>
 
   <div class="status" id="scopebar">
+    <label for="turnoSel">Turno</label>
+    <select id="turnoSel"><option value="1">1º turno (04/10)</option><option value="2">2º turno (25/10)</option></select>
     <label for="lvl">Abrangência</label>
     <select id="lvl"><option value="br">Brasil (Presidente)</option><option value="uf">Estado</option><option value="mun">Município</option></select>
     <select id="ufSel" aria-label="Estado"></select>
@@ -272,8 +274,8 @@ footer a{color:var(--accent)}
 /* ---------- Configuração ---------- */
 const REFRESH_SECONDS = 60;
 const SOURCES = {
-  oficial:  { base: "/tse/oficial/ele2026",               fed: 6257,  est: 6259 },
-  simulado: { base: "/tse-sim/simulado/simulado2026/ele2026", fed: 21270, est: 21272 }
+  oficial:  { base: "/tse/oficial/ele2026",               fed: 6257,  est: 6259,  fed2: 6258,  est2: 6260 },
+  simulado: { base: "/tse-sim/simulado/simulado2026/ele2026", fed: 21270, est: 21272, fed2: 21271, est2: 21273 }
 };
 const UFS = { ac:"Acre", al:"Alagoas", ap:"Amapá", am:"Amazonas", ba:"Bahia", ce:"Ceará", df:"Distrito Federal", es:"Espírito Santo", go:"Goiás", ma:"Maranhão", mt:"Mato Grosso", ms:"Mato Grosso do Sul", mg:"Minas Gerais", pa:"Pará", pb:"Paraíba", pr:"Paraná", pe:"Pernambuco", pi:"Piauí", rj:"Rio de Janeiro", rn:"Rio Grande do Norte", rs:"Rio Grande do Sul", ro:"Rondônia", rr:"Roraima", sc:"Santa Catarina", sp:"São Paulo", se:"Sergipe", to:"Tocantins" };
 
@@ -288,16 +290,18 @@ function makeViews(sc) {
     ? { dir: "br", pfx: "br", lugar: "Brasil" }
     : { dir, pfx, lugar };
   const dist = uf === "df";
+  const t2 = sc.turno === 2, fed = t2 ? "fed2" : "fed", est = t2 ? "est2" : "est";
   const vs = [
-    { id: "pres", label: "Presidente", cargo: 1, elec: "fed", seats: 1, ...pres, short: "Presidente", title: `Presidente da República · ${pres.lugar}`, t3label: `Presidente · ${pres.lugar}` },
-    { id: "gov",  label: "Governador" + estLabel, cargo: 3, elec: "est", seats: 1, dir, pfx, lugar, short: "Governador", title: `Governador · ${lugar}`, t3label: `Governador · ${lugar}` },
-    { id: "sen",  label: "Senador" + estLabel, cargo: 5, elec: "est", seats: 2, dir, pfx, lugar, short: "Senador", title: `Senador · ${lugar}`, t3label: `Senador · ${lugar}` },
-    { id: "dep",  label: "Deputado Federal" + estLabel, cargo: 6, elec: "est", seats: 0, dir, pfx, lugar, short: "Dep. Federal", title: `Deputado Federal · ${lugar}`, t3label: `Deputado Federal · ${lugar}` },
-    { id: "dest", label: (dist ? "Deputado Distrital" : "Deputado Estadual") + estLabel, cargo: dist ? 8 : 7, elec: "est", seats: 0, dir, pfx, lugar, short: dist ? "Dep. Distrital" : "Dep. Estadual", title: `${dist ? "Deputado Distrital" : "Deputado Estadual"} · ${lugar}`, t3label: `${dist ? "Deputado Distrital" : "Deputado Estadual"} · ${lugar}` }
+    { id: "pres", label: "Presidente", cargo: 1, elec: fed, seats: 1, ...pres, short: "Presidente", title: `Presidente da República · ${pres.lugar}`, t3label: `Presidente · ${pres.lugar}` },
+    { id: "gov",  label: "Governador" + estLabel, cargo: 3, elec: est, seats: 1, dir, pfx, lugar, short: "Governador", title: `Governador · ${lugar}`, t3label: `Governador · ${lugar}` },
+    { id: "sen",  label: "Senador" + estLabel, cargo: 5, elec: est, seats: 2, dir, pfx, lugar, short: "Senador", title: `Senador · ${lugar}`, t3label: `Senador · ${lugar}` },
+    { id: "dep",  label: "Deputado Federal" + estLabel, cargo: 6, elec: est, seats: 0, dir, pfx, lugar, short: "Dep. Federal", title: `Deputado Federal · ${lugar}`, t3label: `Deputado Federal · ${lugar}` },
+    { id: "dest", label: (dist ? "Deputado Distrital" : "Deputado Estadual") + estLabel, cargo: dist ? 8 : 7, elec: est, seats: 0, dir, pfx, lugar, short: dist ? "Dep. Distrital" : "Dep. Estadual", title: `${dist ? "Deputado Distrital" : "Deputado Estadual"} · ${lugar}`, t3label: `${dist ? "Deputado Distrital" : "Deputado Estadual"} · ${lugar}` }
   ];
   // visão local (município): os dados do TSE trazem os votos da cidade, mas não os eleitos
-  vs.forEach(v => { v.scope = v.dir; v.local = local && !(v.id === "pres" && sc.level === "br"); });
-  return vs;
+  vs.forEach(v => { v.turno = sc.turno === 2 ? 2 : 1; v.scope = v.dir; v.local = local && !(v.id === "pres" && sc.level === "br"); });
+  // 2º turno só existe para Presidente e Governador
+  return t2 ? vs.filter(v => v.id === "pres" || v.id === "gov") : vs;
 }
 const VIEWS = makeViews({ uf: "mt", level: "uf", mun: "", munNm: "" });
 const PROPORTIONAL = new Set(["dep", "dest"]);
@@ -453,6 +457,10 @@ function renderPanel() {
   const d = state.data[state.active];
   const el = $("panel");
   if (!d) { el.innerHTML = '<div class="msg">Carregando…</div>'; return; }
+  if (d.kind === "wait" && view.turno === 2 && view.id === "gov") {
+    el.innerHTML = `<div class="msg"><strong>Sem 2º turno de Governador em ${esc(view.lugar)}.</strong><p>O 2º turno de governador acontece só onde nenhum candidato passou de 50% dos votos válidos (neste ano: AC, AM, DF, ES, RN e TO).</p></div>`;
+    return;
+  }
   if (d.kind === "wait") {
     el.innerHTML = `<div class="msg"><strong>Resultados ainda não publicados para ${esc(view.title)}.</strong>
       <p>O TSE começa a divulgar às 17h de Brasília (16h em Mato Grosso) de 04/10/2026. Esta página continua tentando a cada minuto.
@@ -480,7 +488,8 @@ function renderPanel() {
       elected.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.party)}</td><td class="r">${fmtInt(c.votes)}</td></tr>`).join("")}</tbody></table></div></div>`;
   } else {
     const max = r.cands.length ? r.cands[0].votes : 0;
-    const note = view.local ? "Votos apurados somente neste município; o resultado do cargo é definido pela votação de todo o estado (ou do país)." : view.id === "pres" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
+    const note = view.local ? "Votos apurados somente neste município; o resultado do cargo é definido pela votação de todo o estado (ou do país)." : (view.turno === 2 && (view.id === "pres" || view.id === "gov")) ? "2º turno: vence quem tiver mais votos válidos."
+      : view.id === "pres" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
       : view.id === "gov" ? "Elege-se quem obtiver mais de 50% dos votos válidos. Caso contrário, haverá 2º turno em 25/10."
       : "Cada eleitor vota em dois candidatos; vencem os dois mais votados. O percentual é calculado sobre os votos válidos.";
     body += `<div class="card"><h2>${esc(view.title)}</h2><p class="note">${note}</p>${candRows(r.cands, max)}</div>`;
@@ -513,6 +522,13 @@ const isRunoff = c => /2º/.test(c.status || "");
    Usa o que o TSE informa; sem isso, projeta pelos votos atuais (>50% dos válidos = vitória; senão, os 2 primeiros). */
 function runoffInfo(view, r) {
   if (view.local || !MAJORITARIAN_RUNOFF.has(view.id) || !r.cands.length) return null;
+  if (view.turno === 2) {   // 2º turno: dois candidatos, vence quem tiver mais votos válidos
+    const won2 = r.cands.filter(c => c.elected);
+    if (won2.length) return { kind: "won", cands: won2.slice(0, 1), official: true };
+    const [x, y] = r.cands;
+    if (!x || x.votes <= 0 || (y && y.votes === x.votes)) return { kind: "open", cands: [], official: false };
+    return { kind: "won", cands: [x], official: false };
+  }
   const off2 = r.cands.filter(isRunoff);
   if (off2.length) return { kind: "runoff", cands: off2, official: true };
   const won = r.cands.filter(c => c.elected);
@@ -530,7 +546,7 @@ function runoffBanner(view, r) {
   const cargo = view.id === "pres" ? "Presidente" : "Governador";
   const cls = info.kind === "won" ? "ok" : "warn";
   const head = info.kind === "won"
-    ? (info.official ? `${cargo} eleito no 1º turno` : `Projeção: ${cargo} eleito no 1º turno (mais de 50% dos válidos)`)
+    ? (view.turno === 2 ? (info.official ? `${cargo} eleito no 2º turno` : `Projeção: ${cargo} eleito no 2º turno (mais votos válidos)`) : info.official ? `${cargo} eleito no 1º turno` : `Projeção: ${cargo} eleito no 1º turno (mais de 50% dos válidos)`)
     : (info.official ? `Classificados para o 2º turno (25/10)` : `Projeção: 2º turno em 25/10 — nenhum candidato passou de 50% dos válidos`);
   const foot = info.official ? "" : `<small>Projeção pelos votos apurados até agora (${fmtPct(r.sectionsPct)} das seções); pode mudar. O resultado oficial é o informado pelo TSE.</small>`;
   return `<div class="banner ${cls}"><strong>${head}</strong><span>${who}</span>${foot}</div>`;
@@ -569,6 +585,8 @@ function t3Card(view, row) {
 function t3Note(view, r, plan) {
   if (view.local) return "Votos apurados no município. Os eleitos do cargo são definidos pela votação de todo o estado (ou do país), então aqui o destaque mostra só os mais votados na cidade.";
   const prov = plan.length && plan[0].prov;
+  if (view.turno === 2 && (view.id === "pres" || view.id === "gov"))
+    return "2º turno: vence quem tiver mais votos válidos." + (prov ? " Destaque pelos votos atuais." : "");
   if (view.id === "pres" || view.id === "gov")
     return "Vence quem tiver mais de 50% dos votos válidos; se ninguém passar disso, haverá 2º turno em 25/10." + (prov ? " Destaque pelos votos atuais." : "");
   if (view.id === "sen") return prov ? "Os 2 mais votados são eleitos. Destaque pelos votos atuais." : "Destaque segue os eleitos informados pelo TSE.";
@@ -581,7 +599,7 @@ function t3Section(view) {
   const d = state.data[view.id];
   let label = `<span class="t3-label">${esc(T3_LABEL[view.id])}</span>`;
   if (!d) return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">Carregando…</div></div></section>`;
-  if (d.kind === "wait") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">Resultados ainda não publicados para este cargo.</div></div></section>`;
+  if (d.kind === "wait") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg">${view.turno === 2 && view.id === "gov" ? "Sem 2º turno de Governador neste estado (só AC, AM, DF, ES, RN e TO)." : "Resultados ainda não publicados para este cargo."}</div></div></section>`;
   if (d.kind === "error") return `<section class="t3-sec">${label}<div class="t3-row solo"><div class="msg err">Falha ao ler os dados do TSE: ${esc(d.message)}</div></div></section>`;
 
   const r = d.result, plan = t3Plan(r, view);
@@ -644,7 +662,7 @@ function resumoItem(v) {
   const d = state.data[v.id];
   const label = T3_TAB[v.id];
   if (!d) return { label, cls: "wait", head: "Carregando…", sub: "" };
-  if (d.kind === "wait") return { label, cls: "wait", head: "Aguardando TSE", sub: "Ainda não publicado" };
+  if (d.kind === "wait") return v.turno === 2 && v.id === "gov" ? { label, cls: "wait", head: "Sem 2º turno", sub: "Neste estado" } : { label, cls: "wait", head: "Aguardando TSE", sub: "Ainda não publicado" };
   if (d.kind === "error") return { label, cls: "wait", head: "Falha na leitura", sub: "Tentando de novo" };
   const r = d.result, prog = `${fmtPct(r.sectionsPct)} das seções`;
   const info = runoffInfo(v, r);
@@ -725,9 +743,10 @@ document.addEventListener("error", e => {
 }, true);
 
 /* ---------- Abrangência (Brasil / Estado / Município) ---------- */
-const SC = { uf: "mt", level: "mun", mun: "", munNm: "", muns: {}, munErr: "" };
-try { const o = JSON.parse(localStorage.getItem("apuracao.scope") || "null"); if (o && UFS[o.uf]) Object.assign(SC, { uf: o.uf, level: o.level || "uf", mun: o.mun || "", munNm: o.munNm || "" }); } catch (_) {}
-const saveScope = () => { try { localStorage.setItem("apuracao.scope", JSON.stringify({ uf: SC.uf, level: SC.level, mun: SC.mun, munNm: SC.munNm })); } catch (_) {} };
+const TURNO2_DESDE = new Date("2026-10-25T00:00:00-04:00");
+const SC = { uf: "mt", level: "mun", mun: "", munNm: "", muns: {}, munErr: "", turno: new Date() >= TURNO2_DESDE ? 2 : 1 };
+try { const o = JSON.parse(localStorage.getItem("apuracao.scope") || "null"); if (o && UFS[o.uf]) Object.assign(SC, { uf: o.uf, level: o.level || "uf", mun: o.mun || "", munNm: o.munNm || "" }); if (o && o.turnoData === TURNO2_DESDE.toISOString().slice(0, 10) && (o.turno === 1 || o.turno === 2)) SC.turno = o.turno; } catch (_) {}
+const saveScope = () => { try { localStorage.setItem("apuracao.scope", JSON.stringify({ uf: SC.uf, level: SC.level, mun: SC.mun, munNm: SC.munNm, turno: SC.turno, turnoData: TURNO2_DESDE.toISOString().slice(0, 10) })); } catch (_) {} };
 
 /* Lista de municípios: arquivo de configuração do TSE (procura o estado dentro do JSON sem depender do formato exato). */
 function findMuns(node, uf) {
@@ -741,7 +760,7 @@ function findMuns(node, uf) {
     for (const k in o) walk(o[k]);
   })(node);
   const best = hit.sort((a, b) => b.length - a.length)[0];
-  return best ? best.map(x => ({ cd: String(x.cd).padStart(5, "0"), nm: x.nm || x.ds })).sort((a, b) => a.nm.localeCompare(b.nm, "pt-BR")) : null;
+  return best ? best.map(x => ({ cd: String(x.cd).padStart(5, "0"), ibge: String(x.cdi || ""), nm: x.nm || x.ds })).sort((a, b) => a.nm.localeCompare(b.nm, "pt-BR")) : null;
 }
 async function loadMuns(uf) {
   if (SC.muns[uf]) return SC.muns[uf];
@@ -767,8 +786,14 @@ async function loadMuns(uf) {
 
 function applyScope(reload) {
   VIEWS.splice(0, VIEWS.length, ...makeViews(SC));
+  const ok = id => VIEWS.some(v => v.id === id);
+  if (!ok(state.active)) state.active = "pres";
+  if (!ok(state.t3)) state.t3 = "pres";
+  if (!ok(MAP.cargo)) MAP.cargo = "pres";
+  if (typeof tl !== "undefined" && tl.idx >= telaoScreens().length) tl.idx = 0;
+  $("turnoSel").value = String(SC.turno);
   const lugar = SC.level === "br" ? "Brasil" : (SC.level === "mun" && SC.mun ? `${SC.munNm || SC.mun} · ${SC.uf.toUpperCase()}` : UFS[SC.uf]);
-  $("sub").textContent = `1º turno · domingo, 04/10/2026 · ${lugar} · dados oficiais do TSE`;
+  $("sub").textContent = `${SC.turno}º turno · domingo, ${SC.turno === 2 ? "25/10" : "04/10"}/2026 · ${lugar} · dados oficiais do TSE`;
   $("lvl").value = SC.level; $("ufSel").value = SC.uf;
   const muns = SC.muns[SC.uf], showMun = SC.level === "mun";
   $("munSel").hidden = !showMun || !muns; $("munCode").hidden = !showMun || !!muns;
@@ -790,6 +815,7 @@ async function scopeInit() {
   applyScope(false);
   if (JSON.stringify(VIEWS.map(v => v.pfx)) !== before) { state.data = {}; renderTabs(); render(); refreshAll(); }
 }
+$("turnoSel").addEventListener("change", e => { SC.turno = Number(e.target.value); MAP.sel = null; applyScope(true); });
 $("lvl").addEventListener("change", async e => {
   SC.level = e.target.value; applyScope(true);
   if (SC.level === "mun" && !SC.muns[SC.uf]) { await loadMuns(SC.uf); const l = SC.muns[SC.uf]; if (l && !SC.mun) { SC.mun = l[0].cd; SC.munNm = l[0].nm; applyScope(true); } else applyScope(false); }
@@ -812,12 +838,12 @@ const normNome = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/
 
 /* spec: nível ("br" = estados, "uf" = municípios do estado escolhido) + cargo */
 function mapSpec(lvl, cargoId) {
-  const view = makeViews({ uf: SC.uf, level: "uf", mun: "", munNm: "" }).find(v => v.id === cargoId) || VIEWS[0];
+  const view = makeViews({ uf: SC.uf, level: "uf", mun: "", munNm: "", turno: SC.turno }).find(v => v.id === cargoId) || VIEWS[0];
   if (lvl === "br") {
-    const v = { ...view, id: "pres", cargo: 1, elec: "fed" };
-    return { key: "br:1", lvl, geoFile: "uf", view: v, title: "Presidente · resultado por estado", unit: "estados" };
+    const v = { ...view, id: "pres", cargo: 1, elec: SC.turno === 2 ? "fed2" : "fed" };
+    return { key: "br:1:t" + SC.turno, lvl, geoFile: "uf", view: v, title: "Presidente · resultado por estado", unit: "estados" };
   }
-  return { key: SC.uf + ":" + view.cargo, lvl, geoFile: "mun-" + SC.uf, view, title: `${view.short} · ${UFS[SC.uf]} por município`, unit: "municípios" };
+  return { key: SC.uf + ":" + view.cargo + ":t" + SC.turno, lvl, geoFile: "mun-" + SC.uf, view, title: `${view.short} · ${UFS[SC.uf]} por município`, unit: "municípios" };
 }
 async function mapGeo(file) {
   if (MAP.geo[file]) return MAP.geo[file];
@@ -845,10 +871,10 @@ async function mapLoad(spec, force) {
     else {
       const muns = await loadMuns(SC.uf);
       if (!muns) { cache.err = SC.munErr || "lista de municípios indisponível"; return; }
-      const byName = new Map(muns.map(m => [normNome(m.nm), m.cd]));
+      const byName = new Map(muns.map(m => [normNome(m.nm), m.cd])), byIbge = new Map(muns.filter(m => m.ibge).map(m => [m.ibge, m.cd]));
       cache.miss = [];
       for (const f of geo.features) {
-        const cd = byName.get(normNome(f.name));
+        const cd = byIbge.get(String(f.id)) || byName.get(normNome(f.name));
         if (cd) tasks.push({ id: f.id, uf: SC.uf, pfx: SC.uf + cd }); else cache.miss.push(f.name);
       }
     }
@@ -1040,7 +1066,7 @@ const telaoScreens = () => [...VIEWS.map(v => v.id), "map-br", "map-uf"];
 
 /* Tela de mapa do telão: só redesenha o mapa quando os dados mudam; o relógio atualiza todo segundo. */
 function telaoMapRender(sid) {
-  const el = $("telao"), spec = sid === "map-br" ? mapSpec("br", "pres") : mapSpec("uf", "gov");
+  const el = $("telao"), spec = sid === "map-br" ? mapSpec("br", "pres") : mapSpec("uf", SC.turno === 2 ? "pres" : "gov");
   const cache = MAP.cache[spec.key];
   const sig = sid + "|" + SC.uf + "|" + (MAP.geo[spec.geoFile] ? 1 : 0) + "|" + (cache ? cache.done + "/" + cache.t : "-");
   const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba", hour: "2-digit", minute: "2-digit", second: "2-digit" });

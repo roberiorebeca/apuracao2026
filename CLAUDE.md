@@ -10,7 +10,7 @@ Painel de apuração (Brasil e Mato Grosso) com dados oficiais do TSE. Site est�
 
 ## Como os dados chegam
 - Fonte oficial: `https://resultados.tse.jus.br/oficial/ele2026/<eleição>/dados/<uf>/<uf>-c<cargo>-e<eleição>-u.json` (aqui acessada via `/tse/oficial/ele2026/...`).
-- Eleições do 1º turno: `6257` (federal: Presidente) e `6259` (estadual: Governador, Senador, Deputados). O arquivo `comum/config/ele-c.json` do TSE lista `6258` e `6260` como segundo turno (campo `cdt2`); confirmar antes de usar.
+- Eleições do 1º turno: `6257` (federal: Presidente) e `6259` (estadual: Governador, Senador, Deputados). 2º turno (CONFIRMADO em 25/10/2026): `6258` (Presidente) e `6260` (Governador, só AC, AM, DF, ES, RN, TO; os demais estados dão 404). Mesmo formato do 1º turno. `SC.turno` (seletor Turno) escolhe os códigos `fed2`/`est2`; no 2º turno só Presidente e Governador existem.
 - Cargos: `c0001` Presidente (UF `br`), `c0003` Governador, `c0005` Senador, `c0006` Deputado Federal, `c0007` Deputado Estadual (UF `mt`).
 - Simulado do TSE (para testes): base `/tse-sim/simulado/simulado2026/ele2026`, eleições `21270` (federal) e `21272` (estadual).
 - Limite do TSE: 100 requisições por segundo por IP. Muitos erros 404 seguidos podem bloquear o IP por 10 minutos, então monte as URLs com cuidado.
@@ -28,16 +28,15 @@ Painel de apuração (Brasil e Mato Grosso) com dados oficiais do TSE. Site est�
 - Não adicione cabeçalhos ou chamadas que gerem muitas requisições novas ao TSE.
 
 ## Pendências
-- Segundo turno (25/10/2026): trocar os códigos de eleição e conferir o formato dos arquivos.
 - Confirmar o caminho das fotos e a contagem de candidatos com os dados reais.
 
 ## Abrangência (Brasil / Estado / Município)
-- `makeViews(SC)` monta os 5 cargos; arquivo municipal assumido como `dados/<uf>/<uf><cod5>-c<cargo>-e<eleição>-u.json` (NÃO CONFIRMADO com dados reais).
-- Lista de municípios lida de `comum/config/ele-c.json` por busca genérica (`findMuns`); se falhar, aparece campo para digitar o código TSE.
+- `makeViews(SC)` monta os 5 cargos; arquivo municipal CONFIRMADO: `dados/<uf>/<uf><cod5>-c<cargo>-e<eleição>-u.json` (ex.: Sapezal = `mt90727`).
+- Lista de municípios CONFIRMADA: `<eleição 1º turno>/config/mun-e<eleição>-cm.json` (campos `cd` TSE, `cdi` IBGE, `nm`); `findMuns` lê; se falhar, aparece campo para digitar o código TSE. `comum/config/ele-c.json` NÃO existe (404).
 - Eleição estadual assumida como 6259 para todas as UFs; DF usa cargo 8 (distrital). Pendente confirmar.
 - Visão municipal (`view.local`) não mostra "eleito" nem projeção de 2º turno: só os mais votados na cidade.
 
 ## Mapa
 - Botão "Mapa" (`#mapa`): Brasil por estado (Presidente) e estado por município (qualquer cargo); entra no rodízio do telão (2 telas).
 - Geometrias em `public/geo/` (uf.json + mun-<uf>.json), geradas a partir de tbrugz/geodata-br e codeforamerica/click_that_hood, simplificadas (caminhos SVG prontos).
-- Município casado por NOME normalizado (lista do TSE × nome no mapa); IDs do TSE e do IBGE diferem. Não confirmado com dados reais.
+- Município do mapa casado pelo código IBGE (`cdi` da lista do TSE × `id` da geometria); nome normalizado só como reserva.

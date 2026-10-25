@@ -1062,7 +1062,8 @@ function telaoSizes(n) {
   return { cols: 4, ph: "7vh", fn: "2.4vh", fs: "1.5vh", fv: "2.5vh" };
 }
 
-const telaoScreens = () => [...VIEWS.map(v => v.id), "map-br", "map-uf"];
+/* No 2º turno, Governador só entra no rodízio se o estado tiver 2º turno (arquivo publicado); senão a tela é pulada. */
+const telaoScreens = () => [...VIEWS.filter(v => !(v.turno === 2 && v.id === "gov" && !(state.data.gov && state.data.gov.kind === "ok"))).map(v => v.id), "map-br", "map-uf"];
 
 /* Tela de mapa do telão: só redesenha o mapa quando os dados mudam; o relógio atualiza todo segundo. */
 function telaoMapRender(sid) {
@@ -1085,10 +1086,11 @@ function telaoMapRender(sid) {
 
 function telaoRender() {
   if (!tl.open) return;
+  if (tl.idx >= telaoScreens().length) tl.idx = 0;
   const sid = telaoScreens()[tl.idx];
   if (sid.startsWith("map-")) return telaoMapRender(sid);
   tl.sig = "";
-  const view = VIEWS[tl.idx], d = state.data[view.id], el = $("telao");
+  const view = VIEWS.find(v => v.id === sid), d = state.data[view.id], el = $("telao");
   const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Cuiaba", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const dots = telaoScreens().map((_, i) => `<i class="${i === tl.idx ? "on" : ""}"></i>`).join("");
   const top = (sub, body) => `<div class="tl-top"><div class="tl-title">${esc(T3_LABEL[view.id])}</div>
